@@ -149,17 +149,24 @@ The frontend ↔ backend contract comes in two styles. The **standard typed API 
 - Both styles are covered by the same eval set so you can compare them on identical images.
 
 ### Object detection / segmentation
-The video's outlines are **masks**, not boxes, so you need segmentation.
+The video's outlines are **masks**, not boxes. Design choice: the **detector only supplies boxes, labels and scores; SAM produces the masks.** That keeps mask quality independent of the detector and avoids relying on newer segmentation variants.
 
-| Option | Use |
+All detectors sit behind a Rust `Detector` trait, so they are swappable via config.
+
+| Option | Role |
 |---|---|
-| **YOLO11-seg (ONNX)** | Fast auto-detect of 80 COCO classes; good default for people, furniture, cups, etc. |
-| **SAM 2 / MobileSAM (ONNX encoder+decoder)** | Click or box-prompted masks for anything; refine detector masks |
-| **VLM bounding boxes → SAM** | Open-vocabulary: ask the VLM "list editable objects with boxes", feed the boxes to SAM for masks. Covers perfume bottle, burger, cheese, foam |
+| **RF-DETR Small/Medium (ONNX)**, Apache-2.0 | **Default detector.** Boxes, labels, scores for the 80 COCO classes (perfume bottle → `bottle`, beer mug → `cup`, burger → `sandwich`). Use only the Apache-2.0 sizes (Nano to Large); the XL/2XL sizes use Roboflow's platform licence |
+| **YOLO11 (det or seg, ONNX)**, AGPL-3.0 | **Optional, user-downloaded** alternative behind the same trait; never bundled. Possibly faster on plain CPU. Users take on the AGPL decision themselves |
+| **SAM 2 / MobileSAM (ONNX encoder+decoder)** | **Mask generator.** Box- or click-prompted masks for every detected object, and click-to-select for anything missed |
+| **VLM bounding boxes → SAM** | Open-vocabulary: ask the VLM "list editable objects with boxes", feed the boxes to SAM. Covers what COCO detectors miss (cheese, foam) |
 | **Grounding DINO / OWL-ViT / Florence-2** | Local open-vocabulary alternative if you don't want VLM boxes |
-| **Pose (RTMPose / YOLO-pose)** and **face landmarks (MediaPipe FaceMesh ONNX)** | v0.2: arm keypoints, expression points |
+| **Pose model (RF-DETR Keypoint / RTMPose) + face landmarks (MediaPipe FaceMesh ONNX)** | v0.2: arm keypoints, expression points |
 
-Recommendation: MVP = YOLO-seg for instant results + VLM boxes → SAM for everything else. Verify the ONNX export and licence of whichever model versions you pick (YOLO weights from Ultralytics are AGPL, which matters for an open-source project's licence; consider RT-DETR / D-FINE (Apache-2.0) variants instead).
+Recommendation: MVP = RF-DETR boxes → SAM masks for instant results, plus VLM boxes → SAM for everything COCO misses.
+
+**Why RF-DETR over YOLO11 for this project:** (1) licence: this is a self-hostable open-source tool and may run as a network service, where YOLO11's AGPL-3.0 is a problem; (2) the detector's accuracy matters less because SAM handles the masks; (3) published benchmarks favour RF-DETR on COCO accuracy, but they are Roboflow's own TensorRT/T4 numbers, so they don't tell us how it runs on laptops.
+
+**Unverified, test in the Milestone 0 spike:** RF-DETR ONNX export and `ort` output format; speed on CPU and CoreML (the heavier transformer backbone may be slower than YOLO11-n on plain CPU); mask quality of box-prompted SAM vs YOLO11-seg masks on the golden images. Switch the default to YOLO11 only if RF-DETR is too slow on CPU or its export fails, and then revisit how it is distributed because of the AGPL.
 
 ### OpenRouter (model switching)
 - One config file maps **stage → model ID**, overridable per request from the UI:
@@ -283,7 +290,7 @@ hands-off/
 |---|---|---|---|
 | 0 | **Spike** (do this first) | Hard-code one image; OpenRouter call that takes original + warped preview + instruction and returns an edit. **Validates whether the generation quality is good enough before building anything else** | 2–3 days |
 | 1 | Backend skeleton | axum, OpenAPI → TS client, upload, SQLite, config, tracing | 1 wk |
-| 2 | Vision | YOLO-seg via `ort`, masks API, outline overlay in UI | 1 wk |
+| 2 | Vision | `Detector` trait; RF-DETR via `ort` + SAM masks, masks API, outline overlay in UI; detector speed/quality comparison vs YOLO11 | 1 wk |
 | 3 | Suggest + plan | VLM property suggestion and widget planning with structured outputs; schema validation and repair. Optional Decisions API routes added after the standard API works | 1–2 wk |
 | 4 | Widgets + preview | Polygon, slider, multi-handle widgets; WebGL warp preview | 1.5–2 wk |
 | 5 | Apply pipeline | Batch edits, summariser, generator, composite, SSE progress, accept / cancel / undo | 1.5 wk |
@@ -310,7 +317,7 @@ Rough total to a usable MVP: **~7–9 weeks** for one developer. Estimates assum
 | Image models don't follow precise geometry | Spike in M0; preview-as-reference; masks; multi-candidate |
 | VLM returns bad widget coordinates | Strict schema validation, clamp to mask, auto-retry, fall back to default widget per property type |
 | Cost per edit | Show estimated cost; cheap models for planning; cache; BYO key |
-| Licence of weights (YOLO = AGPL, some SAM variants differ) | Pick Apache/MIT models or document clearly; weights downloaded, not bundled |
+| Licence of weights (YOLO = AGPL, RF-DETR XL/2XL = Roboflow platform licence, some SAM variants differ) | Default to Apache-2.0 models (RF-DETR Nano–Large); YOLO11 optional and user-downloaded; weights downloaded, not bundled |
 | 3-D head rotation is hard | Defer to v0.3; use FaceMesh + a warp approximation first |
 | Safety / misuse (editing people's bodies and faces) | Terms of use, respect provider moderation, no storage of uploads by default |
 | Adobe's UX / branding | Build our own name and look; the *idea* (on-canvas controls) is open, but don't copy their UI assets or name |
