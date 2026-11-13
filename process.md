@@ -26,13 +26,13 @@ Keep a short dated list at the bottom of this file: phase started, phase done, g
 
 Goal: an empty but fully wired monorepo where CI is green.
 
-- [ ] `git init`; add `.gitignore` (Rust, Node, models, `.env`, build output), `LICENSE` (Apache-2.0 unless you decide otherwise), `.editorconfig`.
-- [ ] Rust workspace: `Cargo.toml` with members `crates/{api,core,vision,llm,imaging}`; `rust-toolchain.toml` pinned; workspace-level lints (`clippy::pedantic`, `unsafe_code = "forbid"` where possible); `rustfmt.toml`; `deny.toml`.
-- [ ] Web app: `web/` via Vite + React + TypeScript (strict); ESLint, Prettier, Vitest, Testing Library, Playwright installed; path aliases; pnpm workspace.
-- [ ] `justfile` (or `Makefile`) with `fmt`, `lint`, `test`, `gen-api`, `dev`, `check` (the full CI gate).
-- [ ] CI (GitHub Actions): format, clippy, nextest, `cargo deny`, web lint/type-check/test, contract-diff check, build. Cache Cargo and pnpm.
-- [ ] Pre-commit hook running format and lint on staged files.
-- [ ] `.env.example`, `README.md` stub, `docs/` skeleton, `docs/adr/0001-record-decisions.md`.
+- [x] `git init`; add `.gitignore` (Rust, Node, models, `.env`, build output), `LICENSE` (Apache-2.0 unless you decide otherwise), `.editorconfig`.
+- [x] Rust workspace: `Cargo.toml` with members `crates/{api,core,vision,llm,imaging}`; `rust-toolchain.toml` pinned; workspace-level lints (`clippy::pedantic`, `unsafe_code = "forbid"` where possible); `rustfmt.toml`; `deny.toml`.
+- [x] Web app: `web/` via Vite + React + TypeScript (strict); ESLint, Prettier, Vitest, Testing Library, Playwright installed; path aliases; npm (see ADR 0002).
+- [x] `justfile` (or `Makefile`) with `fmt`, `lint`, `test`, `gen-api`, `dev`, `check` (the full CI gate).
+- [x] CI (GitHub Actions): format, clippy, nextest, `cargo deny`, web lint/type-check/test, contract-diff check, build. Cache Cargo and npm.
+- [x] Pre-commit hook running format and lint on staged files.
+- [x] `.env.example`, `README.md` stub, `docs/` skeleton, `docs/adr/0001-record-decisions.md`.
 
 Exit: `just check` passes on a clean clone; CI is green on the first push.
 
@@ -237,4 +237,4 @@ Review these at the end of every phase.
 
 ## Progress log
 
-- _(add dated entries here as phases start, finish, and gates are decided)_
+- 2026-11-14: Phase 0 done. `just check` green. Switched frontend to npm and oxlint (ADR 0002): pnpm shim broken locally. `gen-api` is a stub until Phase 2.

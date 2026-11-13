@@ -1,0 +1,12 @@
+[package]
+name = "hands-off-vision"
+description = "Local object detection and segmentation behind swappable traits."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true

@@ -45,7 +45,7 @@ All code must be clean, typesafe, modular, performant, scalable, deduplicated, e
 - Public items are documented with `///` rustdoc. Prefer `&str`/slices in arguments, return owned types, use `#[must_use]` where ignoring a result is a bug.
 
 ### TypeScript / React conventions
-- `strict: true`, no `any`, no non-null assertions without justification, no `@ts-ignore`. ESLint and Prettier must pass with zero warnings.
+- `strict: true`, no `any`, no non-null assertions without justification, no `@ts-ignore`. oxlint and Prettier must pass with zero warnings.
 - Feature-based folders. Components are small and presentational; data fetching lives in query hooks; canvas and warp logic live in plain TypeScript modules that are testable without React.
 - Server state with TanStack Query only; local UI state with Zustand; never mirror server data into local state.
 - Co-locate styles, tests and component files. Use design tokens, never hard-coded colours or spacing.
