@@ -31,98 +31,73 @@ fn point(x: f32, y: f32) -> NormalizedPoint {
     }
 }
 
-fn edge_lengths(outline: &[NormalizedPoint]) -> Vec<f32> {
-    (0..outline.len())
-        .map(|i| {
-            let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
-            (b.x - a.x).hypot(b.y - a.y)
-        })
-        .collect()
+fn distance_to_segment(p: NormalizedPoint, a: NormalizedPoint, b: NormalizedPoint) -> f32 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let length_sq = dx * dx + dy * dy;
+    if length_sq <= f32::EPSILON {
+        return (p.x - a.x).hypot(p.y - a.y);
+    }
+    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / length_sq).clamp(0.0, 1.0);
+    (p.x - (a.x + t * dx)).hypot(p.y - (a.y + t * dy))
 }
 
-/// `count` points spread evenly (by distance) around the closed `outline`.
+/// Ramer-Douglas-Peucker on an open chain, keeping both ends.
+fn simplify_chain(chain: &[NormalizedPoint], tolerance: f32) -> Vec<NormalizedPoint> {
+    let (Some(&first), Some(&last)) = (chain.first(), chain.last()) else {
+        return Vec::new();
+    };
+    let worst = chain
+        .iter()
+        .enumerate()
+        .skip(1)
+        .take(chain.len().saturating_sub(2))
+        .map(|(i, &p)| (i, distance_to_segment(p, first, last)))
+        .max_by(|a, b| a.1.total_cmp(&b.1));
+    match worst {
+        Some((index, distance)) if distance > tolerance => {
+            let mut left = simplify_chain(&chain[..=index], tolerance);
+            left.pop();
+            left.extend(simplify_chain(&chain[index..], tolerance));
+            left
+        }
+        _ => vec![first, last],
+    }
+}
+
+/// The corners of a closed `outline`: as few straight-edged vertices as keep the shape, at most
+/// `max_points`. Empty when the outline is too small to be a shape.
 #[must_use]
-pub fn evenly_along(outline: &[NormalizedPoint], count: usize) -> Vec<NormalizedPoint> {
-    let lengths = edge_lengths(outline);
-    let total: f32 = lengths.iter().sum();
-    if outline.len() < 3 || count == 0 || total <= f32::EPSILON {
+pub fn corner_points(outline: &[NormalizedPoint], max_points: usize) -> Vec<NormalizedPoint> {
+    const START_TOLERANCE: f32 = 0.002;
+    const MIN_POINTS: usize = 4;
+    if outline.len() < MIN_POINTS {
         return Vec::new();
     }
-    let mut points = Vec::with_capacity(count);
-    let (mut edge, mut walked) = (0, 0.0_f32);
-    let spacing = total / f32::from(u16::try_from(count).unwrap_or(u16::MAX));
-    for n in 0..count {
-        let target = spacing * f32::from(u16::try_from(n).unwrap_or(u16::MAX));
-        while edge + 1 < lengths.len() && walked + lengths[edge] < target {
-            walked += lengths[edge];
-            edge += 1;
+    // Split the loop at its two most distant vertices so each half is an open chain.
+    let far = (1..outline.len())
+        .max_by(|&i, &j| {
+            let d = |k: usize| (outline[k].x - outline[0].x).hypot(outline[k].y - outline[0].y);
+            d(i).total_cmp(&d(j))
+        })
+        .unwrap_or(1);
+    let mut closing = outline[far..].to_vec();
+    closing.push(outline[0]);
+    let mut tolerance = START_TOLERANCE;
+    loop {
+        let mut points = simplify_chain(&outline[..=far], tolerance);
+        points.pop();
+        let mut back = simplify_chain(&closing, tolerance);
+        back.pop();
+        points.extend(back);
+        if points.len() <= max_points || tolerance > 1.0 {
+            return if points.len() >= MIN_POINTS {
+                points
+            } else {
+                Vec::new()
+            };
         }
-        let t = if lengths[edge] > 0.0 {
-            ((target - walked) / lengths[edge]).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let (a, b) = (outline[edge], outline[(edge + 1) % outline.len()]);
-        points.push(point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+        tolerance *= 1.4;
     }
-    points
-}
-
-/// Where along the outline (0 to the perimeter) the closest point to `target` lies, and that
-/// point.
-fn nearest_on_outline(
-    outline: &[NormalizedPoint],
-    target: NormalizedPoint,
-) -> (f32, NormalizedPoint) {
-    let lengths = edge_lengths(outline);
-    let mut best = (f32::INFINITY, 0.0, target);
-    let mut walked = 0.0;
-    for (i, length) in lengths.iter().enumerate() {
-        let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
-        let t = if *length > 0.0 {
-            (((target.x - a.x) * (b.x - a.x) + (target.y - a.y) * (b.y - a.y)) / (length * length))
-                .clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let candidate = point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
-        let distance = (candidate.x - target.x).hypot(candidate.y - target.y);
-        if distance < best.0 {
-            best = (distance, walked + length * t, candidate);
-        }
-        walked += length;
-    }
-    (best.1, best.2)
-}
-
-/// Move model-chosen control points onto the object's outline so they sit on its edge.
-///
-/// Points that land close together are merged, and the result follows the outline's order.
-/// Falls back to evenly spaced points when too few distinct ones remain.
-#[must_use]
-pub fn anchor_to_outline(
-    points: &[NormalizedPoint],
-    outline: &[NormalizedPoint],
-) -> Vec<NormalizedPoint> {
-    const MERGE_DISTANCE: f32 = 0.03;
-    if outline.len() < 3 {
-        return points.to_vec();
-    }
-    let mut anchored: Vec<(f32, NormalizedPoint)> = Vec::new();
-    for &target in points {
-        let (along, snapped) = nearest_on_outline(outline, target);
-        let crowded = anchored
-            .iter()
-            .any(|(_, p)| (p.x - snapped.x).hypot(p.y - snapped.y) < MERGE_DISTANCE);
-        if !crowded {
-            anchored.push((along, snapped));
-        }
-    }
-    if anchored.len() < 4 {
-        return evenly_along(outline, MAX_DEFAULT_POINTS);
-    }
-    anchored.sort_by(|a, b| a.0.total_cmp(&b.0));
-    anchored.into_iter().map(|(_, p)| p).collect()
 }
 
 /// A sensible widget of `kind` placed from the object's box and outline.
@@ -154,7 +129,7 @@ pub fn default_widget(kind: WidgetKind, property_key: &str, object: &DetectedObj
             }
         }
         WidgetKind::ControlPoints => {
-            let mut points = evenly_along(&object.outline, MAX_DEFAULT_POINTS);
+            let mut points = corner_points(&object.outline, MAX_DEFAULT_POINTS);
             if points.len() < 3 {
                 points = vec![
                     point(b.x, b.y),
@@ -238,54 +213,56 @@ mod tests {
         );
     }
 
-    fn square_outline() -> Vec<NormalizedPoint> {
-        [(0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8)]
-            .iter()
-            .map(|&(x, y)| point(x, y))
-            .collect()
-    }
-
-    fn distance_to_square(p: NormalizedPoint) -> f32 {
-        let outside = p.x < 0.2 - 1e-4 || p.x > 0.8 + 1e-4 || p.y < 0.2 - 1e-4 || p.y > 0.8 + 1e-4;
-        if outside {
-            return f32::INFINITY;
+    fn l_shape() -> Vec<NormalizedPoint> {
+        // An L made of many collinear points, as a traced mask outline would be.
+        let mut points = Vec::new();
+        let corners = [
+            (0.2, 0.2),
+            (0.5, 0.2),
+            (0.5, 0.5),
+            (0.8, 0.5),
+            (0.8, 0.8),
+            (0.2, 0.8),
+        ];
+        for i in 0..corners.len() {
+            let (a, b) = (corners[i], corners[(i + 1) % corners.len()]);
+            for step in 0..10_u8 {
+                let t = f32::from(step) / 10.0;
+                points.push(point(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t));
+            }
         }
-        (p.x - 0.2)
-            .abs()
-            .min((p.x - 0.8).abs())
-            .min((p.y - 0.2).abs())
-            .min((p.y - 0.8).abs())
+        points
     }
 
     #[test]
-    fn evenly_spaced_points_lie_on_the_outline() {
-        let points = evenly_along(&square_outline(), 8);
-        assert_eq!(points.len(), 8);
-        for p in points {
-            assert!(distance_to_square(p) < 1e-4, "{p:?}");
+    fn corners_of_a_traced_shape_are_its_real_corners() {
+        let corners = corner_points(&l_shape(), 12);
+        assert_eq!(corners.len(), 6, "{corners:?}");
+        for expected in [(0.2, 0.2), (0.5, 0.5), (0.8, 0.8)] {
+            assert!(
+                corners
+                    .iter()
+                    .any(|p| (p.x - expected.0).abs() < 1e-3 && (p.y - expected.1).abs() < 1e-3),
+                "{expected:?} missing from {corners:?}"
+            );
         }
     }
 
     #[test]
-    fn model_points_inside_the_object_are_moved_to_its_edge() {
-        let inside: Vec<_> = [(0.5, 0.3), (0.7, 0.5), (0.5, 0.7), (0.3, 0.5), (0.4, 0.4)]
-            .iter()
-            .map(|&(x, y)| point(x, y))
+    fn corners_are_limited_by_loosening_the_tolerance() {
+        let circle: Vec<_> = (0..90_u8)
+            .map(|i| {
+                let angle = f32::from(i) / 90.0 * std::f32::consts::TAU;
+                point(0.5 + 0.3 * angle.cos(), 0.5 + 0.3 * angle.sin())
+            })
             .collect();
-        let anchored = anchor_to_outline(&inside, &square_outline());
-        assert!(anchored.len() >= 4);
-        for p in anchored {
-            assert!(distance_to_square(p) < 1e-4, "{p:?}");
-        }
+        let corners = corner_points(&circle, 10);
+        assert!((4..=10).contains(&corners.len()), "{}", corners.len());
     }
 
     #[test]
-    fn crowded_model_points_fall_back_to_even_spacing() {
-        let crowded: Vec<_> = (0..6_u8)
-            .map(|i| point(0.5 + f32::from(i) * 0.001, 0.5))
-            .collect();
-        let anchored = anchor_to_outline(&crowded, &square_outline());
-        assert_eq!(anchored.len(), MAX_DEFAULT_POINTS);
+    fn tiny_outlines_have_no_corners() {
+        assert!(corner_points(&[point(0.1, 0.1), point(0.2, 0.2)], 12).is_empty());
     }
 
     #[test]

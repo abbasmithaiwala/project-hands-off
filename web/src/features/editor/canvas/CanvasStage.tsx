@@ -24,6 +24,8 @@ interface CanvasStageProps {
   previews: readonly ObjectPreview[]
   /** Show the note that previews are approximate. Hidden when the result is being reviewed. */
   showPreviewNote?: boolean
+  /** Hide the selection outline while a control is showing; the control is the outline then. */
+  quietSelection?: boolean
   /** Drawn over the canvas, given the current view; used for the editing controls. */
   overlay?: (context: { view: Viewport; imageSize: Size }) => ReactNode
   onHover: (id: number | null) => void
@@ -53,6 +55,7 @@ export function CanvasStage({
   selectedId,
   previews,
   showPreviewNote = true,
+  quietSelection = false,
   overlay,
   onHover,
   onSelect,
@@ -107,7 +110,10 @@ export function CanvasStage({
   }, [stage, imageUrl])
 
   useEffect(() => stage?.setObjects(objects), [stage, objects])
-  useEffect(() => stage?.setHighlight(hoveredId, selectedId), [stage, hoveredId, selectedId])
+  useEffect(() => {
+    const hovered = quietSelection && hoveredId === selectedId ? null : hoveredId
+    stage?.setHighlight(hovered, quietSelection ? null : selectedId)
+  }, [stage, hoveredId, selectedId, quietSelection])
   const shownPreviews = useRef(new Set<number>())
   useEffect(() => {
     if (!stage) return

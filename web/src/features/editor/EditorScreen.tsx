@@ -135,6 +135,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
         selectedId={selectedId}
         previews={previews}
         showPreviewNote={editing}
+        quietSelection={editing && widget.data !== undefined && activeProperty !== null}
         stageRef={stageRef}
         overlay={({ view, imageSize: size }) => {
           if (apply.status === 'review') {

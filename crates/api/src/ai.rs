@@ -1,7 +1,7 @@
 //! Property suggestions and widget planning: ask a model, validate, repair once, then fall
 //! back to deterministic defaults. Results are cached per image, object and prompt version.
 
-use hands_off_core::model::{DetectedObject, Property, PropertyList, Widget};
+use hands_off_core::model::{DetectedObject, Property, PropertyList, Widget, WidgetKind};
 use hands_off_core::storage::BlobKey;
 use hands_off_core::{Error, ImageId, ObjectId, Result};
 use hands_off_imaging::crop::{CropRegion, crop_mask_to_jpeg, crop_to_jpeg};
@@ -11,7 +11,7 @@ use hands_off_llm::contracts::{
     SUGGESTIONS_SCHEMA, WIDGET_SCHEMA, parse_suggestions, parse_widget, planner_user_text,
     suggester_user_text, suggestion_schema, widget_schema,
 };
-use hands_off_llm::defaults::{anchor_to_outline, default_properties, default_widget};
+use hands_off_llm::defaults::{default_properties, default_widget};
 use hands_off_llm::{ImageInput, JsonRequest, Repair, Stage};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -181,6 +181,10 @@ async fn plan(
     object: &DetectedObject,
     property: &Property,
 ) -> Result<Widget> {
+    // A reshape control is the object's own outline reduced to its corners; no model needed.
+    if property.widget == WidgetKind::ControlPoints {
+        return Ok(default_widget(property.widget, &property.key, object));
+    }
     let region = CropRegion::around(&object.bbox, CROP_PADDING);
     let decoded = original(state, image).await?;
     let mask = Mask::from_png(&state.blobs.get(&BlobKey::mask(image, object.id)).await?)?;
@@ -226,13 +230,7 @@ async fn plan(
         parse_widget(content, kind, &place, &snap)
     })
     .await?;
-    Ok(match planned {
-        Some(Widget::ControlPoints { points }) => Widget::ControlPoints {
-            points: anchor_to_outline(&points, &object.outline),
-        },
-        Some(widget) => widget,
-        None => default_widget(kind, &property.key, object),
-    })
+    Ok(planned.unwrap_or_else(|| default_widget(kind, &property.key, object)))
 }
 
 /// The object's box in crop coordinates as `[left, top, right, bottom]`.

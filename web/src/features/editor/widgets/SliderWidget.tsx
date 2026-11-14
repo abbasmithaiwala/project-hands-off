@@ -7,8 +7,10 @@ import styles from './WidgetLayer.module.css'
 
 const STEP = 0.05
 const FINE_STEP = 0.01
+const LABEL_CHAR_PX = 8
+const LABEL_PADDING_PX = 48
 
-/** One handle on a line: dragging it stretches the object along that line. */
+/** A translucent bar laid on the object with a fixed end and a handle: drag to stretch it. */
 export function SliderWidget({
   widget,
   change,
@@ -20,15 +22,16 @@ export function SliderWidget({
   const { imageSize, view } = context
   const value = change?.value ?? widget.initial
   const handle = sliderHandlePoint(widget, value, imageSize)
-  const reach = sliderHandlePoint(widget, widget.max, imageSize)
-  const shortest = sliderHandlePoint(widget, widget.min, imageSize)
-
   const toScreen = (p: { x: number; y: number }) =>
     imageToScreen(view, { x: p.x * imageSize.width, y: p.y * imageSize.height })
   const start = toScreen(widget.axis.start)
-  const far = toScreen(reach)
-  const near = toScreen(shortest)
   const now = toScreen(handle)
+
+  const length = Math.hypot(now.x - start.x, now.y - start.y)
+  const fitsLabel = length > propertyLabel.length * LABEL_CHAR_PX + LABEL_PADDING_PX
+  // Keep the text readable: never upside down.
+  const angle = (Math.atan2(now.y - start.y, now.x - start.x) * 180) / Math.PI
+  const upright = angle > 90 || angle < -90 ? angle + 180 : angle
 
   const commit = (next: number) =>
     onChange({ kind: 'slider', value: clamp(next, widget.min, widget.max) })
@@ -36,8 +39,16 @@ export function SliderWidget({
   return (
     <>
       <svg className={styles.guides} aria-hidden="true">
-        <line className={styles.trackReach} x1={near.x} y1={near.y} x2={far.x} y2={far.y} />
-        <line className={styles.track} x1={start.x} y1={start.y} x2={now.x} y2={now.y} />
+        <line className={styles.bar} x1={start.x} y1={start.y} x2={now.x} y2={now.y} />
+        {fitsLabel && (
+          <text
+            className={styles.barLabel}
+            transform={`translate(${(start.x + now.x) / 2} ${(start.y + now.y) / 2}) rotate(${upright})`}
+          >
+            {propertyLabel}
+          </text>
+        )}
+        <circle className={styles.anchor} cx={start.x} cy={start.y} r={7} />
       </svg>
       <Handle
         point={handle}

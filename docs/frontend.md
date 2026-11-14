@@ -116,3 +116,7 @@ Control points sit on the object's outline (the server snaps model-chosen points
 - **Projects.** The project name in the top bar renames on click. The landing screen lists recent projects (open, or delete after confirmation). The address `#/p/<id>` reopens the project after a reload.
 - **Export.** Download the current image, or a JSON edit log built from the version history.
 - **First run.** A sample photo (credited in `public/sample/ATTRIBUTION.md`) is one click away. Two short tips (pick an object, drag the handle) appear once each and are remembered. Empty or failed analysis offers Try again or Choose another photo.
+
+## Control style
+
+Modelled on Adobe's Project Hands On: quiet, white, translucent. A slider is a soft bar laid across the object with its name in small capitals, a fixed end and a draggable handle (no dashed track). A reshape control is the object's outline reduced to its corners, drawn as straight thin lines with a small disc at each corner. A handle gets a square frame when you hover or grab it, and turns orange once moved. While a control is showing, the orange selection outline is hidden so only one thing is drawn. Reshape corners come from the detected outline (`corner_points`), not from a model, so they are instant and always on the edge.
