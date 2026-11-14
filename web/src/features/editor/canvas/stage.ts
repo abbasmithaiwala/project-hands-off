@@ -55,6 +55,8 @@ export interface PreviewSpec {
   bbox: { x: number; y: number; width: number; height: number }
   maskUrl: string
   deform: Deformation | null
+  /** Draw the moved pixels. Border-only previews still move the outline and are used when applying. */
+  showPixels: boolean
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement | OffscreenCanvas): Promise<Blob | null> {
@@ -288,8 +290,9 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
     wanted.clear()
   }
 
-  function applyDeformation(layer: PreviewLayer, deform: Deformation | null) {
-    layer.container.visible = deform !== null
+  function applyDeformation(layer: PreviewLayer, spec: PreviewSpec) {
+    const { deform } = spec
+    layer.container.visible = deform !== null && spec.showPixels
     if (deform) deformPositions(layer.grid.positions, deform, layer.mesh.vertices as Float32Array)
   }
 
@@ -425,7 +428,7 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
       wanted.set(objectId, spec)
       const existing = layers.get(objectId)
       if (existing && existing.maskUrl === spec.maskUrl) {
-        applyDeformation(existing, spec.deform)
+        applyDeformation(existing, spec)
         drawOverlay()
         return
       }
@@ -443,7 +446,7 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
           }
           layers.set(objectId, layer)
           previewLayer.addChild(layer.container)
-          applyDeformation(layer, latest.deform)
+          applyDeformation(layer, latest)
           drawOverlay()
         })
         .catch(() => building.delete(objectId))
@@ -460,6 +463,7 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
       world.scale.set(scale)
       world.position.set(0, 0)
       overlay.visible = false
+      for (const [id, layer] of layers) layer.container.visible = wanted.get(id)?.deform != null
       try {
         app.renderer.render({ container: world, target })
         const canvas = app.renderer.extract.canvas({ target })
@@ -468,6 +472,10 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
         world.scale.set(saved.scale)
         world.position.set(saved.x, saved.y)
         overlay.visible = true
+        for (const [id, layer] of layers) {
+          const spec = wanted.get(id)
+          layer.container.visible = spec?.deform != null && spec.showPixels
+        }
         target.destroy(true)
       }
     },

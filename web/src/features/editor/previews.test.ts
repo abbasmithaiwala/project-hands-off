@@ -98,6 +98,31 @@ describe('buildPreviews', () => {
     ).toEqual([])
   })
 
+  it('moves pixels for sliders but only the border for reshaping controls', () => {
+    const [stretch] = buildPreviews(
+      [pending(0, slider, { kind: 'slider', value: 0.7 })],
+      objects,
+      size,
+      maskUrl,
+    )
+    expect(stretch?.spec.showPixels).toBe(true)
+
+    const [reshape] = buildPreviews(
+      [
+        pending(0, handles, {
+          kind: 'multi_handle',
+          origin: [{ x: 0.3, y: 0.3 }],
+          target: [{ x: 0.35, y: 0.3 }],
+        }),
+      ],
+      objects,
+      size,
+      maskUrl,
+    )
+    expect(reshape?.spec.showPixels).toBe(false)
+    expect(reshape?.spec.deform).not.toBeNull()
+  })
+
   it('returns nothing without edits', () => {
     expect(buildPreviews([], objects, size, maskUrl)).toEqual([])
   })

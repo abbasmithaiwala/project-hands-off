@@ -11,7 +11,7 @@ use hands_off_llm::contracts::{
     SUGGESTIONS_SCHEMA, WIDGET_SCHEMA, parse_suggestions, parse_widget, planner_user_text,
     suggester_user_text, suggestion_schema, widget_schema,
 };
-use hands_off_llm::defaults::{default_properties, default_widget};
+use hands_off_llm::defaults::{anchor_to_outline, default_properties, default_widget};
 use hands_off_llm::{ImageInput, JsonRequest, Repair, Stage};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -226,7 +226,13 @@ async fn plan(
         parse_widget(content, kind, &place, &snap)
     })
     .await?;
-    Ok(planned.unwrap_or_else(|| default_widget(kind, &property.key, object)))
+    Ok(match planned {
+        Some(Widget::ControlPoints { points }) => Widget::ControlPoints {
+            points: anchor_to_outline(&points, &object.outline),
+        },
+        Some(widget) => widget,
+        None => default_widget(kind, &property.key, object),
+    })
 }
 
 /// The object's box in crop coordinates as `[left, top, right, bottom]`.

@@ -17,6 +17,7 @@ use hands_off_imaging::mask::Mask;
 use image::{DynamicImage, imageops::FilterType};
 use ort::environment::Environment;
 use ort::session::Session;
+use ort::session::builder::AutoDevicePolicy;
 use ort::value::Tensor;
 
 use crate::coco;
@@ -48,8 +49,12 @@ impl RfDetrSeg {
             .with_name("hands-off")
             .build()
             .map_err(Error::internal)?;
+        // ort defaults to the "max efficiency" device policy, which on macOS hands the model to
+        // CoreML: ~13 s to compile on every start, then slower than the CPU (ADR 0004).
         let session = Session::builder(&environment)
             .map_err(Error::internal)?
+            .with_auto_device(AutoDevicePolicy::PreferCPU)
+            .map_err(|e| Error::internal(std::io::Error::other(e.to_string())))?
             .commit_from_file(path)
             .map_err(Error::internal)?;
         let input_size = session

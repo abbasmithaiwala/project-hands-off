@@ -32,7 +32,7 @@ Checksums are recorded in `models/manifest.json` the first time a file is used. 
 
 ## Performance
 
-Measured on an Apple M4, CPU execution provider, release build, after warm-up: about 260-290 ms per image, including preprocessing, inference and mask cleanup. The first call also loads the model (about a second). CoreML is not used because it is slower than CPU for this model (see ADR 0004).
+Measured on an Apple M4, CPU execution provider, release build, after warm-up: about 260-290 ms per image, including preprocessing, inference and mask cleanup. The model loads in about half a second and the server preloads it at start-up, so the first request is as fast as the rest. Explicit device policy matters: `ort` defaults to "max efficiency", which on macOS silently routes the model to CoreML (13 s compile on every start, then 2-5 s per image). The session is pinned to `AutoDevicePolicy::PreferCPU` (see ADR 0004). `cargo run --release -p hands-off-vision --example profile -- photo.jpg` times each stage.
 
 ## Tests
 

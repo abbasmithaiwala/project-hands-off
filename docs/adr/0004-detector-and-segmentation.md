@@ -38,3 +38,7 @@ The Rust `ort` implementation reproduces the Python reference: box IoU of 0.98 o
 - The release profile has LTO off: thin LTO drops `___isPlatformVersionAtLeast`, which ONNX Runtime's prebuilt macOS libraries need, and the link fails.
 
 SAM click-to-segment and the optional YOLO11 detector are deferred (they are outside the MVP path).
+
+## Addendum: pin the device policy
+
+The Rust session must set `AutoDevicePolicy::PreferCPU`. Left alone, `ort` selects the most power-efficient device, which on Apple Silicon is CoreML: model load took about 13 s on every start and detection 2-5 s per image, against about 0.5 s load and 0.5 s per image on the CPU (loaded laptop). Analysis of a photo went from 17 s cold to 0.65 s.

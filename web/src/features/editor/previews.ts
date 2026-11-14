@@ -73,14 +73,19 @@ export function buildPreviews(
 ): ObjectPreview[] {
   const previews: ObjectPreview[] = []
   for (const object of objects) {
-    const deformations = edits
-      .filter((e) => e.objectId === object.id)
+    const mine = edits.filter((e) => e.objectId === object.id)
+    const deformations = mine
       .map((e) => deformationFor(e.widget, e.edit.change, size, object.bbox))
       .filter((d): d is Deformation => d !== null)
     if (deformations.length === 0) continue
     previews.push({
       objectId: object.id,
-      spec: { bbox: object.bbox, maskUrl: maskUrl(object.id), deform: compose(deformations) },
+      spec: {
+        bbox: object.bbox,
+        maskUrl: maskUrl(object.id),
+        deform: compose(deformations),
+        showPixels: mine.every((e) => e.widget.kind === 'slider'),
+      },
     })
   }
   return previews

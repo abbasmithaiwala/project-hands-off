@@ -20,7 +20,7 @@ pub const WIDGET_SCHEMA: &str = "widget_plan";
 /// Bump when the suggester prompt or schema changes, to invalidate cached results.
 pub const SUGGESTER_PROMPT_VERSION: &str = "v1";
 /// Bump when the planner prompt or schema changes, to invalidate cached results.
-pub const PLANNER_PROMPT_VERSION: &str = "v1";
+pub const PLANNER_PROMPT_VERSION: &str = "v1.1";
 /// Schema identifier for edit summaries.
 pub const SUMMARY_SCHEMA: &str = "edit_summary";
 /// Bump when the summariser prompt or schema changes.

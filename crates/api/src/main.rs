@@ -19,6 +19,8 @@ async fn main() -> anyhow::Result<()> {
         .context("could not initialise storage")?;
 
     cleanup::spawn_sweeper(state.clone());
+    let detectors = std::sync::Arc::clone(&state.detectors);
+    tokio::spawn(async move { detectors.warm_up().await });
 
     let listener = TcpListener::bind(bind)
         .await

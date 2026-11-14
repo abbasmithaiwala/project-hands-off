@@ -105,6 +105,10 @@ The canvas pixels themselves are only checked by the end-to-end and visual tests
 
 Undo history, project persistence and cleanup of discarded results come in Phase 8.
 
+## Reshaping
+
+Control points sit on the object's outline (the server snaps model-chosen points onto it). Dragging one moves only the border; the photo is not warped on screen. The warped reference image is still rendered off-screen when you press Apply so the model has geometry to follow. Sliders keep their live stretch.
+
 ## History, projects and first run
 
 - **Versions.** The editor store holds every version of the open project and a cursor. Undo and redo (buttons, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) move the cursor; accepting an edit appends a version and drops any redo tail. Moving is disabled while an edit is applying or under review.
