@@ -9,6 +9,12 @@ import { LandingScreen } from './LandingScreen'
 const png = () => new File(['pixels'], 'photo.png', { type: 'image/png' })
 
 describe('LandingScreen', () => {
+  it('shows the project name as a wordmark next to its logo', () => {
+    const { container } = renderWithProviders(<LandingScreen />)
+    expect(screen.getByText('Hands-Off')).toBeInTheDocument()
+    expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+  })
+
   it('invites the user to add a photo', () => {
     renderWithProviders(<LandingScreen />)
     expect(

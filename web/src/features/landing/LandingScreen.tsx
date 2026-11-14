@@ -4,6 +4,7 @@ import { ThemeToggle } from '@/app/ThemeToggle'
 import { describeError } from '@/api/errors'
 import { useUploadImage } from '@/api/hooks'
 import { Button } from '@/design/Button'
+import { Logo } from '@/design/Logo'
 import { Skeleton } from '@/design/Skeleton'
 import { toast } from '@/design/toastStore'
 import { isSupportedImage } from '@/lib/files'
@@ -64,7 +65,10 @@ export function LandingScreen() {
     <main className={styles.screen}>
       <BlobBackdrop />
       <header className={styles.top}>
-        <span className={styles.brand}>Hands-Off</span>
+        <span className={styles.brand}>
+          <Logo size={40} />
+          <span className={styles.name}>Hands-Off</span>
+        </span>
         <span className={styles.tagline}>Open-source photo editing, by hand</span>
         <ThemeToggle />
       </header>
