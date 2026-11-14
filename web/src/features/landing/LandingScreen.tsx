@@ -1,5 +1,6 @@
 import { ImagePlus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
+import { ThemeToggle } from '@/app/ThemeToggle'
 import { describeError } from '@/api/errors'
 import { useUploadImage } from '@/api/hooks'
 import { Button } from '@/design/Button'
@@ -8,6 +9,7 @@ import { toast } from '@/design/toastStore'
 import { isSupportedImage } from '@/lib/files'
 import { useEditorStore } from '@/state/editorStore'
 import styles from './LandingScreen.module.css'
+import { BlobBackdrop } from './BlobBackdrop'
 import { RecentProjects } from './RecentProjects'
 
 const SAMPLE_URL = '/sample/couch.jpg'
@@ -60,6 +62,18 @@ export function LandingScreen() {
 
   return (
     <main className={styles.screen}>
+      <BlobBackdrop />
+      <header className={styles.top}>
+        <span className={styles.brand}>Hands-Off</span>
+        <span className={styles.tagline}>Open-source photo editing, by hand</span>
+        <ThemeToggle />
+      </header>
+      <div className={styles.hero}>
+        <h1 className={styles.title}>Edit by dragging, not typing.</h1>
+        <p className={styles.subtitle}>
+          Drop a photo, pick an object, and reshape it with a handle. No prompts needed.
+        </p>
+      </div>
       <div
         className={styles.zone}
         data-dragging={dragging}
@@ -74,11 +88,6 @@ export function LandingScreen() {
         <div className={styles.mark} aria-hidden="true">
           <ImagePlus size={28} />
         </div>
-        <h1 className={styles.title}>Edit by dragging, not typing.</h1>
-        <p className={styles.subtitle}>
-          Drop a photo, pick an object, and reshape it with a handle. No prompts needed.
-        </p>
-
         {upload.isPending ? (
           <div className={styles.progress} role="status">
             <Skeleton width={200} height={10} />

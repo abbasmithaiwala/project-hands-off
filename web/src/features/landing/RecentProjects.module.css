@@ -1,10 +1,11 @@
 .section {
-  width: min(960px, 100%);
+  position: relative;
+  width: min(1200px, 100%);
 }
 
 .heading {
   margin-bottom: var(--space-3);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font-size: var(--text-sm);
   font-weight: 650;
 }
@@ -12,16 +13,60 @@
 .row {
   display: flex;
   gap: var(--space-3);
-  padding: 0;
+  padding: var(--space-1) var(--space-1) var(--space-2);
   margin: 0;
   overflow-x: auto;
   list-style: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--space-1);
+  scrollbar-width: none;
+  /* Fade the ends so it is clear there is more, without a scrollbar. */
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
+.row::-webkit-scrollbar {
+  display: none;
+}
+
+.scroller {
+  position: relative;
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  opacity: 0;
+  background: var(--color-glass);
+  backdrop-filter: blur(12px);
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.arrow[data-side='start'] {
+  left: var(--space-3);
+}
+
+.arrow[data-side='end'] {
+  right: var(--space-3);
+}
+
+.scroller:hover .arrow,
+.arrow:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .arrow {
+    display: none;
+  }
 }
 
 .card {
   position: relative;
   flex: none;
-  width: 160px;
+  width: 168px;
+  scroll-snap-align: start;
 }
 
 .open {
@@ -30,9 +75,10 @@
   gap: var(--space-1);
   width: 100%;
   padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, #fff 45%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, #fff 58%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -49,7 +95,7 @@
 .thumb {
   width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   object-fit: cover;
   background: var(--color-canvas);
 }
@@ -99,5 +145,17 @@
   }
   .open:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+:global(:root[data-theme='dark']) .open {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(28, 28, 34, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme])) .open {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(28, 28, 34, 0.6);
   }
 }

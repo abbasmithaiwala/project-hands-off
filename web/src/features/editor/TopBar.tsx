@@ -1,5 +1,6 @@
 import { History, Plus, Redo2, ScrollText, Settings, Undo2 } from 'lucide-react'
 import type { ImageRecord } from '@/api/client'
+import { ThemeToggle } from '@/app/ThemeToggle'
 import { IconButton } from '@/design/IconButton'
 import { Panel } from '@/design/Panel'
 import { cn } from '@/lib/cn'
@@ -71,6 +72,7 @@ export function TopBar({
           <History size={18} />
         </IconButton>
         <ExportMenu versions={versions} current={current} />
+        <ThemeToggle />
         <IconButton label="Activity" aria-pressed={outputOpen} onClick={onToggleOutput}>
           <ScrollText size={18} />
         </IconButton>

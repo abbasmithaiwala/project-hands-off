@@ -1,5 +1,5 @@
-import { Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
 import type { ImageRecord } from '@/api/client'
 import { describeError } from '@/api/errors'
 import { useDeleteProject, useOpenProject, useProjects } from '@/api/hooks'
@@ -18,6 +18,9 @@ export function RecentProjects() {
   const open = useOpenProject()
   const remove = useDeleteProject()
   const [pendingDelete, setPendingDelete] = useState<ImageRecord | null>(null)
+  const row = useRef<HTMLUListElement>(null)
+  const scrollBy = (direction: 1 | -1) =>
+    row.current?.scrollBy({ left: direction * row.current.clientWidth * 0.8, behavior: 'smooth' })
 
   if (projects.isPending) {
     return (
@@ -52,35 +55,53 @@ export function RecentProjects() {
       <h2 id="recent-heading" className={styles.heading}>
         Recent projects
       </h2>
-      <ul className={styles.row}>
-        {projects.data.map((project) => (
-          <li key={project.id} className={styles.card}>
-            <button
-              type="button"
-              className={styles.open}
-              aria-label={`Open ${projectName(project)}`}
-              disabled={open.isPending}
-              onClick={() => openProject(project)}
-            >
-              <img
-                className={styles.thumb}
-                src={`/api/v1/images/${project.id}/thumbnail`}
-                alt=""
-                loading="lazy"
-              />
-              <span className={styles.name}>{projectName(project)}</span>
-              <span className={styles.meta}>{timeAgo(project.created_at)}</span>
-            </button>
-            <IconButton
-              label={`Delete ${projectName(project)}`}
-              className={styles.delete}
-              onClick={() => setPendingDelete(project)}
-            >
-              <Trash2 size={16} />
-            </IconButton>
-          </li>
-        ))}
-      </ul>
+      <div className={styles.scroller}>
+        <IconButton
+          label="Scroll back"
+          className={styles.arrow}
+          data-side="start"
+          onClick={() => scrollBy(-1)}
+        >
+          <ChevronLeft size={18} />
+        </IconButton>
+        <IconButton
+          label="Scroll forward"
+          className={styles.arrow}
+          data-side="end"
+          onClick={() => scrollBy(1)}
+        >
+          <ChevronRight size={18} />
+        </IconButton>
+        <ul ref={row} className={styles.row}>
+          {projects.data.map((project) => (
+            <li key={project.id} className={styles.card}>
+              <button
+                type="button"
+                className={styles.open}
+                aria-label={`Open ${projectName(project)}`}
+                disabled={open.isPending}
+                onClick={() => openProject(project)}
+              >
+                <img
+                  className={styles.thumb}
+                  src={`/api/v1/images/${project.id}/thumbnail`}
+                  alt=""
+                  loading="lazy"
+                />
+                <span className={styles.name}>{projectName(project)}</span>
+                <span className={styles.meta}>{timeAgo(project.created_at)}</span>
+              </button>
+              <IconButton
+                label={`Delete ${projectName(project)}`}
+                className={styles.delete}
+                onClick={() => setPendingDelete(project)}
+              >
+                <Trash2 size={16} />
+              </IconButton>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <Dialog
         open={pendingDelete !== null}
