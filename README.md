@@ -61,9 +61,9 @@ and can change your mind at any time in **Settings**. No code changes, no redepl
 | Suggest | Looks at an object and proposes what can be changed | `deepseek/deepseek-v4.1-flash` |
 | Place controls | Decides where the control goes | `deepseek/deepseek-v4.1-flash` |
 | Summarise | Writes the change log | `deepseek/deepseek-v4.1-flash` |
-| Generate | Makes the edited image | `google/gemini-3.1-flash-image` (about $0.07 an edit) |
+| Generate | Makes the edited image | `google/gemini-3-pro-image` (about $0.14 an edit) |
 
-Prefer the cleanest result? Choose `google/gemini-3-pro-image`. Want it cheaper? Try a lighter model. Anything
+Want it cheaper or faster? Try `google/gemini-3.1-flash-image` or a lighter model. Anything
 OpenRouter lists works, and a fallback model is tried if your first choice fails. See [docs/models.md](docs/models.md).
 
 You bring your own OpenRouter key. It stays on your server, is never sent to the browser, and is never logged.

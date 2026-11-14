@@ -179,8 +179,8 @@ impl Default for ModelSettings {
             suggester: "deepseek/deepseek-v4.1-flash".into(),
             ui_planner: "deepseek/deepseek-v4.1-flash".into(),
             summariser: "deepseek/deepseek-v4.1-flash".into(),
-            generator: "google/gemini-3.1-flash-image".into(),
-            draft_generator: "google/gemini-3.1-flash-image".into(),
+            generator: "google/gemini-3-pro-image".into(),
+            draft_generator: "google/gemini-3-pro-image".into(),
             fallback: "anthropic/claude-haiku-5.5".into(),
         }
     }

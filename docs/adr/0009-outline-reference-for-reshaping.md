@@ -1,7 +1,7 @@
 # 9. Outline reference for reshaping, and one default image model
 
 Date: 2026-11-14
-Status: Accepted (supersedes the generator default in [ADR 0008](0008-cheaper-default-generator.md))
+Status: Accepted (supersedes the generator default in [ADR 0008](0008-cheaper-default-generator.md); generator default superseded by [ADR 0013](0013-pro-image-default-generator.md))
 
 ## Context
 
@@ -22,7 +22,7 @@ Each is one run on one photo, so treat them as strong hints, not statistics.
 ## Decisions
 
 - When every pending edit is a control-point reshape, the browser draws each new outline as a thin magenta line with corner dots over the original photo, and sends that as the reference with `preview_kind: "outline"`. The server then uses a fixed prompt that names the edited objects and ignores the point-by-point sentence. Sliders and handles keep the warped preview (`preview_kind: "warped"`, the default).
-- The default `generator` is `google/gemini-3.1-flash-image`, the same as `draft_generator`. "Faster draft" is hidden while they are equal. `google/gemini-3-pro-image` stays available in Settings for cleaner results.
+- ~~The default `generator` is `google/gemini-3.1-flash-image`, the same as `draft_generator`.~~ Superseded by [ADR 0013](0013-pro-image-default-generator.md): both default to `google/gemini-3-pro-image`. "Faster draft" is hidden while they are equal.
 - Summaries and change logs still come from the summariser as before.
 
 ## Consequences

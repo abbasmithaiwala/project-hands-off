@@ -9,8 +9,8 @@ Hosted models are reached through [OpenRouter](https://openrouter.ai), so any mo
 | `suggester` | Looks at a crop of one object and proposes the properties a user could edit (length, shape, arm position...) | `deepseek/deepseek-v4.1-flash` |
 | `ui_planner` | Decides where the on-canvas control for a chosen property sits | `deepseek/deepseek-v4.1-flash` |
 | `summariser` | Turns the edits into the instruction for the image model and a change log. If it fails or answers unusably, a template is used so the edit still goes ahead | `deepseek/deepseek-v4.1-flash` |
-| `generator` | Produces the edited image from the original and a reference image (a warped preview for sliders, a drawn outline for reshaping) | `google/gemini-3.1-flash-image` (about $0.07 per edit, about 10 s; `google/gemini-3-pro-image` is cleaner at about $0.14, and `google/gemini-3.1-flash-lite-image` is cheapest but does not follow an outline) |
-| `draft_generator` | A faster, cheaper generator offered as "Faster draft" when retrying. The button is hidden when it is the same model as `generator` (the default) | `google/gemini-3.1-flash-image` |
+| `generator` | Produces the edited image from the original and a reference image (a warped preview for sliders, a drawn outline for reshaping) | `google/gemini-3-pro-image` (about $0.14 per edit, about 18 s; `google/gemini-3.1-flash-image` is about half the price and time but less reliable, and `google/gemini-3.1-flash-lite-image` is cheapest but does not follow an outline) |
+| `draft_generator` | A faster, cheaper generator offered as "Faster draft" when retrying. The button is hidden when it is the same model as `generator` (the default) | `google/gemini-3-pro-image` |
 | `fallback` | Tried when a stage's own model fails | `anthropic/claude-haiku-5.5` |
 
 Rationale and measurements: [ADR 0003](adr/0003-image-generation-strategy.md) (generation) and [ADR 0005](adr/0005-ai-model-defaults.md) (suggestions and planning).
