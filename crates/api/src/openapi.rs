@@ -17,7 +17,7 @@ use crate::routes::{edits, health, images, jobs, objects, projects, settings};
     info(
         title = "Hands-Off API",
         description = "Edit images by direct manipulation.",
-        license(name = "Apache-2.0")
+        license(name = "MIT")
     ),
     paths(
         health::health,

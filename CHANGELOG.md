@@ -5,6 +5,9 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The project licence is now the MIT License (it was Apache-2.0).
+
 ## [0.1.0] - 2026-11-14
 
 First release.

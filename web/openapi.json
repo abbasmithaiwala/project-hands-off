@@ -4,7 +4,7 @@
     "title": "Hands-Off API",
     "description": "Edit images by direct manipulation.",
     "license": {
-      "name": "Apache-2.0"
+      "name": "MIT"
     },
     "version": "0.1.0"
   },

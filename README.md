@@ -138,7 +138,7 @@ Issues, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRI
 
 ## Licence and credits
 
-Apache-2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Detection uses
+MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Detection uses
 RF-DETR-Seg (Apache-2.0) and ONNX Runtime (MIT); model weights are downloaded, never bundled.
 
 Hands-Off is an independent project inspired by Adobe's *Project Hands On* (Adobe MAX Sneaks 2026). It is not

@@ -324,7 +324,7 @@ Rough total to a usable MVP: **~7–9 weeks** for one developer. Estimates assum
 
 **Questions for you:**
 1. Project name: keep `hands-off`?
-2. Licence: MIT/Apache-2.0 (I recommend Apache-2.0)?
+2. Licence: MIT (decided; see ADR 0012).
 3. Self-hosted web app first, or desktop (Tauri) too?
 4. Is cloud-only generation fine for MVP, or do you want a local-model path early?
 

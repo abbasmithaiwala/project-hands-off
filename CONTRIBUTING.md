@@ -46,5 +46,5 @@ property pack, detector or model provider.
 
 Use the issue templates. For security problems, follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
-By contributing you agree that your work is licensed under the Apache License 2.0, and you agree to follow the
+By contributing you agree that your work is licensed under the MIT License, and you agree to follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
