@@ -1,0 +1,17 @@
+.tooltip {
+  z-index: 50;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  box-shadow: var(--shadow-2);
+  animation: fade var(--duration-fast) var(--ease);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}

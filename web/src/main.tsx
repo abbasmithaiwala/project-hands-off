@@ -1,7 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { App } from './App.tsx'
-import './index.css'
+import { App } from '@/app/App'
+import { Providers } from '@/app/Providers'
+import { applyStoredTheme } from '@/app/theme'
+import '@/design/tokens.css'
+import '@/design/global.css'
+
+applyStoredTheme()
 
 const container = document.getElementById('root')
 if (!container) {
@@ -10,6 +15,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <Providers>
+      <App />
+    </Providers>
   </StrictMode>,
 )

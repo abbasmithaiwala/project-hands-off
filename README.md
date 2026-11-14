@@ -18,7 +18,7 @@ just dev       # start the web app (proxies /api to the server)
 just gen-api   # regenerate the OpenAPI spec and TypeScript client
 ```
 
-The API is documented in [docs/api.md](docs/api.md), including every configuration variable.
+The API is documented in [docs/api.md](docs/api.md), including every configuration variable. To try the whole app without a key, start the server with `HANDS_OFF_DEMO_AI=1 just serve`. See [docs/frontend.md](docs/frontend.md) for the UI, [docs/vision.md](docs/vision.md) for detection and [docs/models.md](docs/models.md) for the AI models.
 
 Project conventions live in [CLAUDE.md](CLAUDE.md).
 

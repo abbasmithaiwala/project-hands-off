@@ -3,7 +3,7 @@
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 
-const DEFAULT_FILTER: &str = "info,hands_off_api=debug,tower_http=info";
+const DEFAULT_FILTER: &str = "info,hands_off_api=debug,tower_http=info,ort=warn";
 
 /// Install the global tracing subscriber. Set `RUST_LOG` to change verbosity and
 /// `HANDS_OFF_LOG_FORMAT=json` for structured output.

@@ -22,6 +22,12 @@ test:
 deny:
     cargo deny check
 
+e2e:
+    cd web && npx playwright install chromium && npm run test:e2e
+
+visual:
+    cd web && npm run test:visual
+
 models:
     python3 -m venv .venv-models
     .venv-models/bin/pip install --quiet rfdetr onnx

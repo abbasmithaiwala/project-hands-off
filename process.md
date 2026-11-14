@@ -118,14 +118,14 @@ Exit: schema-valid rate meets the target you set in `eval/` (suggested: 95% or h
 
 Goal: a beautiful, minimal, empty-state-to-canvas experience before any editing logic.
 
-- [ ] Design tokens (colour, type, spacing, radius, shadow, motion), dark and light themes, reduced-motion support; a small primitive set (Button, IconButton, Panel, Toast, Skeleton, Tooltip, Dialog) built on accessible headless components.
-- [ ] App shell: drop-zone landing (drag, paste, pick), canvas stage, floating action bar, collapsible output panel, minimal top bar.
-- [ ] Inline API-key prompt shown only when first needed; Advanced settings drawer (model per stage) hidden by default.
-- [ ] PixiJS canvas: pan/zoom, fit-to-screen, hi-DPI, object outline overlay with hover and select, keyboard navigation between objects.
-- [ ] Generated API client + TanStack Query hooks; SSE hook for analysis and jobs; global error boundary with friendly messages.
-- [ ] Zustand store for editor state (selection, active property, pending edits).
+- [x] Design tokens (colour, type, spacing, radius, shadow, motion), dark and light themes, reduced-motion support; a small primitive set (Button, IconButton, Panel, Toast, Skeleton, Tooltip, Dialog) built on accessible headless components.
+- [x] App shell: drop-zone landing (drag, paste, pick), canvas stage, floating action bar, collapsible output panel, minimal top bar.
+- [x] Inline API-key prompt shown only when first needed; Advanced settings drawer (model per stage) hidden by default.
+- [x] PixiJS canvas: pan/zoom, fit-to-screen, hi-DPI, object outline overlay with hover and select, keyboard navigation between objects.
+- [x] Generated API client + TanStack Query hooks; SSE hook for analysis and jobs; global error boundary with friendly messages.
+- [x] Zustand store for editor state (selection, active property, pending edits).
 
-Tests: component and hook tests (Vitest), accessibility scan (axe) on main screens, Playwright smoke test (upload, see outlines) against the mock provider, screenshot baselines for key states.
+Tests: component and hook tests (Vitest), accessibility scan (axe) on main screens, Playwright tests against a mocked API, screenshot baselines for key states (local, macOS).
 
 Exit: upload to selectable outlines feels instant and polished; Lighthouse accessibility check meets your target.
 
@@ -242,3 +242,4 @@ Review these at the end of every phase.
 - 2026-11-14: Phase 2 done. Typed API with upload, images, jobs (SSE, cancel, timeout), SQLite + filesystem storage, OpenAPI to TypeScript client via `just gen-api`. 38 Rust API tests, 30 core, 8 imaging, 4 web. Smoke-tested the real server with curl. TypeScript pinned to 5.x (ADR 0002). `RUSTSEC-2026-0459` (SQLite WAL flaw in the `libsqlite3-sys` that `sqlx` 0.9.0 pins) is ignored in `deny.toml` with a documented reason; remove once `sqlx` allows `libsqlite3-sys` 0.39 or newer.
 - 2026-11-14: Phase 3 done (with SAM click-to-segment and YOLO11 deferred). Rust `ort` + RF-DETR-Seg reproduces the Python reference (IoU >= 0.98), ~260-290 ms per image in release. Model manager with checksums and download, EXIF orientation, mask cleanup and outlines, `/analyze` job streaming `object_found` events, cached results. Release builds need LTO off (see ADR 0004). Golden tests skip when the model is not installed.
 - 2026-11-14: Phase 4 done. `llm` crate (OpenRouter client with retry, fallback and cost capture; mock and demo providers; strict JSON schemas), versioned prompts, suggester and widget planner with validation, one repair retry and deterministic defaults, settings API (write-only key, model choice), `HANDS_OFF_DEMO_AI` mode. Benchmarked six models including `typesafe/jev-router` (ADR 0005). Fixed a real schema bug and a real placement-quality problem found by live testing. Note: `jev` turned out to be TypeSafe's Jev Router model on OpenRouter, not the typed-decisions API assumed earlier; it is supported as an optional model choice and the Decisions API phase below needs revisiting.
+- 2026-11-14: Phase 5 done. Design tokens and primitives, landing (drop, paste, pick), lazy-loaded editor with a PixiJS canvas (pan, zoom, hover, select, keyboard), property menu fed by the AI suggestions, planned widgets drawn on the canvas, activity panel, inline API-key dialog, settings dialog, theme store. 115 unit and component tests, axe clean on four views, 10 Playwright tests, 4 visual baselines. Real-browser review found and fixed: stale hit-test polygons when the image loaded after the objects, theme not applied on the landing page after reload, duplicate accessible name on the file input. Not done: Lighthouse score (no Lighthouse run yet); visual baselines are macOS-only.
