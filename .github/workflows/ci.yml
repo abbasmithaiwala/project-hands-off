@@ -32,3 +32,7 @@ jobs:
           tool: just,cargo-nextest,cargo-deny
       - run: cd web && npm ci
       - run: just check
+      - name: API contract is up to date
+        run: |
+          just gen-api
+          git diff --exit-code

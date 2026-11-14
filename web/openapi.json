@@ -1,0 +1,881 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hands-Off API",
+    "description": "Edit images by direct manipulation.",
+    "license": {
+      "name": "Apache-2.0"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Report that the server is up.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images": {
+      "post": {
+        "tags": ["images"],
+        "summary": "Upload an image. Re-uploading identical bytes returns the existing record.",
+        "operationId": "upload",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "An identical image already existed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageRecord"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Image stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File or dimensions too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported image type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}": {
+      "get": {
+        "tags": ["images"],
+        "summary": "Fetch an image's metadata.",
+        "operationId": "get_image",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}/original": {
+      "get": {
+        "tags": ["images"],
+        "summary": "Download the original image bytes.",
+        "operationId": "get_original",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The original image",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}/thumbnail": {
+      "get": {
+        "tags": ["images"],
+        "summary": "Download a JPEG thumbnail.",
+        "operationId": "get_thumbnail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG thumbnail",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "tags": ["jobs"],
+        "summary": "Fetch a job's current state.",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["jobs"],
+        "summary": "Request cancellation of a job. Cancelling a finished job has no effect.",
+        "operationId": "cancel_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Cancellation requested"
+          },
+          "404": {
+            "description": "Unknown job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/events": {
+      "get": {
+        "tags": ["jobs"],
+        "summary": "Stream a job's events as server-sent events. Each event is a [`JobEvent`] JSON object;\nthe stream ends after the terminal event.",
+        "operationId": "job_events",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobEvent"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Axis": {
+        "type": "object",
+        "description": "A line segment along which a slider moves.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "$ref": "#/components/schemas/NormalizedPoint",
+            "description": "Where the slider ends."
+          },
+          "start": {
+            "$ref": "#/components/schemas/NormalizedPoint",
+            "description": "Where the slider starts."
+          }
+        }
+      },
+      "BBox": {
+        "type": "object",
+        "description": "An axis-aligned box in normalised image coordinates.",
+        "required": ["x", "y", "width", "height"],
+        "properties": {
+          "height": {
+            "type": "number",
+            "format": "float",
+            "description": "Height."
+          },
+          "width": {
+            "type": "number",
+            "format": "float",
+            "description": "Width."
+          },
+          "x": {
+            "type": "number",
+            "format": "float",
+            "description": "Left edge."
+          },
+          "y": {
+            "type": "number",
+            "format": "float",
+            "description": "Top edge."
+          }
+        }
+      },
+      "ContentHash": {
+        "type": "string",
+        "description": "Lowercase hex SHA-256 digest of an image's bytes."
+      },
+      "DetectedObject": {
+        "type": "object",
+        "description": "An object found in an image.",
+        "required": ["id", "label", "bbox", "score"],
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BBox",
+            "description": "Bounding box."
+          },
+          "id": {
+            "$ref": "#/components/schemas/ObjectId",
+            "description": "Index within the image."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable class label."
+          },
+          "score": {
+            "type": "number",
+            "format": "float",
+            "description": "Detector confidence in `0.0..=1.0`."
+          }
+        }
+      },
+      "Edit": {
+        "type": "object",
+        "description": "One user edit on one object property.",
+        "required": ["object_id", "property", "change"],
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/EditChange",
+            "description": "What the user changed."
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId",
+            "description": "Object being edited."
+          },
+          "property": {
+            "type": "string",
+            "description": "Property key being edited."
+          }
+        }
+      },
+      "EditChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A slider moved to `value`.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["slider"]
+              },
+              "value": {
+                "type": "number",
+                "format": "float",
+                "description": "New value."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Points moved from `origin` to `target`.",
+            "required": ["origin", "target", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["control_points"]
+              },
+              "origin": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NormalizedPoint"
+                },
+                "description": "Positions before the edit."
+              },
+              "target": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NormalizedPoint"
+                },
+                "description": "Positions after the edit."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Handles moved from `origin` to `target`.",
+            "required": ["origin", "target", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["multi_handle"]
+              },
+              "origin": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NormalizedPoint"
+                },
+                "description": "Positions before the edit."
+              },
+              "target": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NormalizedPoint"
+                },
+                "description": "Positions after the edit."
+              }
+            }
+          }
+        ],
+        "description": "The change a user made with a widget."
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "JSON body of every error response.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode",
+            "description": "Stable machine-readable code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          }
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "description": "Stable error identifiers exposed through the API.",
+        "enum": [
+          "validation",
+          "unsupported_media",
+          "payload_too_large",
+          "not_found",
+          "timeout",
+          "cancelled",
+          "internal"
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "description": "Liveness report.",
+        "required": ["status", "version"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `ok` while the server is running."
+          },
+          "version": {
+            "type": "string",
+            "description": "Server version."
+          }
+        }
+      },
+      "ImageFormat": {
+        "type": "string",
+        "description": "Supported upload formats.",
+        "enum": ["jpeg", "png", "webp"]
+      },
+      "ImageId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifier of an uploaded image."
+      },
+      "ImageRecord": {
+        "type": "object",
+        "description": "Metadata of an uploaded image.",
+        "required": ["id", "hash", "format", "width", "height", "size_bytes", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Upload time."
+          },
+          "format": {
+            "$ref": "#/components/schemas/ImageFormat",
+            "description": "Detected format."
+          },
+          "hash": {
+            "$ref": "#/components/schemas/ContentHash",
+            "description": "SHA-256 of the original bytes; identical uploads share one record."
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Height in pixels.",
+            "minimum": 0
+          },
+          "id": {
+            "$ref": "#/components/schemas/ImageId",
+            "description": "Unique identifier."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the original file in bytes.",
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Width in pixels.",
+            "minimum": 0
+          }
+        }
+      },
+      "JobEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A pipeline stage started or advanced.",
+            "required": ["stage", "message", "type"],
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "Human-readable description."
+              },
+              "stage": {
+                "type": "string",
+                "description": "Stage name, for example `generating`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["progress"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A line of reasoning or diagnostics for the output panel.",
+            "required": ["line", "type"],
+            "properties": {
+              "line": {
+                "type": "string",
+                "description": "The log line."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["log"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The job finished successfully.",
+            "required": ["type"],
+            "properties": {
+              "result": {
+                "type": ["object", "null"],
+                "description": "Optional job-specific result payload."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["completed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The job failed.",
+            "required": ["code", "message", "type"],
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/ErrorCode",
+                "description": "Stable error code."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable message."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The job was cancelled.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          }
+        ],
+        "description": "An event streamed to clients while a job runs."
+      },
+      "JobId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifier of a background job."
+      },
+      "JobRecord": {
+        "type": "object",
+        "description": "Persisted summary of a job.",
+        "required": ["id", "kind", "status", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the job was created."
+          },
+          "error_code": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCode",
+                "description": "Failure code when `status` is `failed`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "type": ["string", "null"],
+            "description": "Failure message when `status` is `failed`."
+          },
+          "finished_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the job reached a terminal state."
+          },
+          "id": {
+            "$ref": "#/components/schemas/JobId",
+            "description": "Unique identifier."
+          },
+          "kind": {
+            "type": "string",
+            "description": "What the job does, for example `analyze`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "description": "Current state."
+          }
+        }
+      },
+      "JobStatus": {
+        "type": "string",
+        "description": "Lifecycle state of a job.",
+        "enum": ["running", "completed", "failed", "cancelled"]
+      },
+      "NormalizedPoint": {
+        "type": "object",
+        "description": "A point in normalised image coordinates (origin top-left).",
+        "required": ["x", "y"],
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "float",
+            "description": "Horizontal position, `0.0` left to `1.0` right."
+          },
+          "y": {
+            "type": "number",
+            "format": "float",
+            "description": "Vertical position, `0.0` top to `1.0` bottom."
+          }
+        }
+      },
+      "ObjectId": {
+        "type": "integer",
+        "format": "int32",
+        "description": "Index of a detected object within one image.",
+        "minimum": 0
+      },
+      "Property": {
+        "type": "object",
+        "description": "An editable property of an object.",
+        "required": ["key", "label", "widget"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Stable key, for example `length`."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label shown to the user."
+          },
+          "widget": {
+            "$ref": "#/components/schemas/WidgetKind",
+            "description": "Control used to edit it."
+          }
+        }
+      },
+      "UploadForm": {
+        "type": "object",
+        "description": "Multipart form accepted by the upload endpoint.",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "The image file (JPEG, PNG or WebP)."
+          }
+        }
+      },
+      "Widget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A slider scaling a property between `min` and `max`.",
+            "required": ["axis", "min", "max", "initial", "kind"],
+            "properties": {
+              "axis": {
+                "$ref": "#/components/schemas/Axis",
+                "description": "Line the handle moves along."
+              },
+              "initial": {
+                "type": "number",
+                "format": "float",
+                "description": "Starting value."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["slider"]
+              },
+              "max": {
+                "type": "number",
+                "format": "float",
+                "description": "Highest allowed value."
+              },
+              "min": {
+                "type": "number",
+                "format": "float",
+                "description": "Lowest allowed value."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Control points forming a shape.",
+            "required": ["points", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["control_points"]
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NormalizedPoint"
+                },
+                "description": "Initial point positions."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Independent handles.",
+            "required": ["handles", "kind"],
+            "properties": {
+              "handles": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NormalizedPoint"
+                },
+                "description": "Initial handle positions."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["multi_handle"]
+              }
+            }
+          }
+        ],
+        "description": "Placement and geometry of a control on the canvas."
+      },
+      "WidgetKind": {
+        "type": "string",
+        "description": "The kind of on-canvas control used to edit a property.",
+        "enum": ["slider", "control_points", "multi_handle"]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "system",
+      "description": "Server status"
+    },
+    {
+      "name": "images",
+      "description": "Upload and fetch images"
+    },
+    {
+      "name": "jobs",
+      "description": "Background jobs and their event streams"
+    }
+  ]
+}

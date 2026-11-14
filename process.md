@@ -60,14 +60,14 @@ Exit: both gates passed, ADRs written, default models chosen.
 
 Goal: a running API with a generated, typed client and no model logic yet.
 
-- [ ] `core`: domain types (`ImageId`, `ObjectId`, `NormalizedPoint`, `Object`, `Property`, `Widget`, `Edit`), error enum, config types. All `serde` + `schemars` + `utoipa`.
-- [ ] `api`: axum app, graceful shutdown, `tower-http` (trace, CORS, compression, body limits), health route, structured error responses with stable codes.
-- [ ] Config loading (env + optional file) with sensible defaults and validation; zero required config except the OpenRouter key.
-- [ ] Storage traits (`BlobStore`, `ProjectStore`) with filesystem and SQLite (sqlx, migrations) implementations.
-- [ ] `POST /api/v1/images`: validated upload (type, size, dimensions), content hashing, thumbnail generation.
-- [ ] OpenAPI generation and the TS client generation step wired into `just gen-api`; CI fails on a diff.
-- [ ] Job manager: async jobs, progress events over SSE, cancellation, timeouts.
-- [ ] `tracing` setup with request IDs and per-stage spans.
+- [x] `core`: domain types (`ImageId`, `ObjectId`, `NormalizedPoint`, `Object`, `Property`, `Widget`, `Edit`), error enum, config types. All `serde` + `schemars` + `utoipa`.
+- [x] `api`: axum app, graceful shutdown, `tower-http` (trace, CORS, compression, body limits), health route, structured error responses with stable codes.
+- [x] Config loading (env + optional file) with sensible defaults and validation; zero required config except the OpenRouter key.
+- [x] Storage traits (`BlobStore`, `ProjectStore`) with filesystem and SQLite (sqlx, migrations) implementations.
+- [x] `POST /api/v1/images`: validated upload (type, size, dimensions), content hashing, thumbnail generation.
+- [x] OpenAPI generation and the TS client generation step wired into `just gen-api`; CI fails on a diff.
+- [x] Job manager: async jobs, progress events over SSE, cancellation, timeouts.
+- [x] `tracing` setup with request IDs and per-stage spans.
 
 Tests: router integration tests (upload happy and failure paths), job lifecycle and cancellation, config validation, contract diff in CI.
 
@@ -239,3 +239,4 @@ Review these at the end of every phase.
 
 - 2026-11-14: Phase 0 done. `just check` green. Switched frontend to npm and oxlint (ADR 0002): pnpm shim broken locally. `gen-api` is a stub until Phase 2.
 - 2026-11-14: Phase 1 done. Gate 1 passed: `google/gemini-3-pro-image` with a preview reference gave acceptable edits on 5/5 golden images ($0.14, ~18 s); text-only prompts and `gpt-5-image-mini` are not viable (ADR 0003). Gate 2 passed: RF-DETR-Seg Medium exports to ONNX and runs at ~0.35 s on CPU; SAM dropped from the MVP critical path (ADR 0004). Rust `ort` confirmation moves to Phase 3.
+- 2026-11-14: Phase 2 done. Typed API with upload, images, jobs (SSE, cancel, timeout), SQLite + filesystem storage, OpenAPI to TypeScript client via `just gen-api`. 38 Rust API tests, 30 core, 8 imaging, 4 web. Smoke-tested the real server with curl. TypeScript pinned to 5.x (ADR 0002). `RUSTSEC-2026-0459` (SQLite WAL flaw in the `libsqlite3-sys` that `sqlx` 0.9.0 pins) is ignored in `deny.toml` with a documented reason; remove once `sqlx` allows `libsqlite3-sys` 0.39 or newer.

@@ -1,1 +1,1 @@
-//! `OpenRouter` gateway and model-facing contracts.
+//! OpenRouter gateway and model-facing contracts.

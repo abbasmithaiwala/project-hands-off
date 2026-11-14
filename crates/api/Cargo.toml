@@ -8,5 +8,43 @@ rust-version.workspace = true
 repository.workspace = true
 publish = false
 
+[[bin]]
+name = "hands-off"
+path = "src/main.rs"
+
+[[bin]]
+name = "openapi"
+path = "src/bin/openapi.rs"
+
 [lints]
 workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+async-trait.workspace = true
+axum = { version = "0.8.9", features = ["multipart", "macros"] }
+chrono.workspace = true
+dotenvy = "0.15.7"
+futures = "0.3.34"
+hands-off-core = { version = "0.1.0", path = "../core" }
+hands-off-imaging = { version = "0.1.0", path = "../imaging" }
+hex = "0.4.3"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.11.1"
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "uuid", "chrono"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "signal", "sync", "time", "fs"] }
+tokio-stream = { version = "0.1.19", features = ["sync"] }
+tokio-util = "0.7.20"
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["trace", "cors", "compression-gzip", "limit", "request-id", "util"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+utoipa = { workspace = true, features = ["axum_extras"] }
+uuid.workspace = true
+
+[dev-dependencies]
+futures = "0.3.34"
+http-body-util = "0.1.5"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+tempfile = "3.27.0"

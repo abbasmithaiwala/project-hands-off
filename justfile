@@ -23,7 +23,9 @@ deny:
     cargo deny check
 
 gen-api:
-    @echo "OpenAPI and TypeScript client generation is added in Phase 2."
+    cargo run --quiet -p hands-off-api --bin openapi > web/openapi.json
+    cd web && npx openapi-typescript openapi.json -o src/api/schema.d.ts
+    cd web && npx prettier --write openapi.json src/api/schema.d.ts
 
 build:
     cargo build --workspace
@@ -31,5 +33,8 @@ build:
 
 dev:
     cd web && npm run dev
+
+serve:
+    cargo run -p hands-off-api --bin hands-off
 
 check: fmt-check lint test deny build

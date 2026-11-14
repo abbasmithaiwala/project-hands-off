@@ -12,9 +12,13 @@ Requirements: Rust (see `rust-toolchain.toml`), Node 22+, [`just`](https://githu
 
 ```sh
 cd web && npm ci && cd ..
-just check   # format, lint, test, dependency audit, build
-just dev     # start the web app
+just check     # format, lint, test, dependency audit, build
+just serve     # start the API on 127.0.0.1:8080
+just dev       # start the web app (proxies /api to the server)
+just gen-api   # regenerate the OpenAPI spec and TypeScript client
 ```
+
+The API is documented in [docs/api.md](docs/api.md), including every configuration variable.
 
 Project conventions live in [CLAUDE.md](CLAUDE.md).
 
