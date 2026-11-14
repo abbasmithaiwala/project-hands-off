@@ -1,0 +1,197 @@
+name: Release
+
+# Push a version tag (vX.Y.Z) to publish: binaries, the detection model, a container image,
+# signed checksums and release notes. See docs/releasing.md.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag matches the crate version and the changelog
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          crate=$(awk '/^\[workspace.package\]/{f=1;next} f && /^version/{gsub(/"/,"",$3);print $3;exit}' Cargo.toml)
+          if [ "$version" != "$crate" ]; then
+            echo "::error::tag v$version does not match Cargo.toml version $crate"; exit 1
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Third-party notices are current
+        run: python3 scripts/third_party_notices.py --check
+
+  web:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+
+  binaries:
+    needs: [verify, web]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: linux-x86_64 }
+          - { os: ubuntu-24.04-arm, target: linux-aarch64 }
+          - { os: macos-14, target: macos-aarch64 }
+          - { os: macos-15-intel, target: macos-x86_64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build --release --locked -p hands-off-api --bin hands-off
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: package/web
+      - name: Package
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          name="hands-off-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp target/release/hands-off "dist/$name/"
+          cp -R package/web "dist/$name/web"
+          cp LICENSE THIRD_PARTY_NOTICES.md README.md "dist/$name/"
+          tar -C dist -czf "$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.target }}
+          path: hands-off-*.tar.gz
+          if-no-files-found: error
+
+  model:
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Export the detection model (Apache-2.0 weights, downloaded by users on first run)
+        run: |
+          pip install --quiet rfdetr onnx
+          python scripts/export_models.py model
+      - id: hash
+        run: |
+          cd model
+          sha256sum rfdetr-seg-medium.onnx | tee rfdetr-seg-medium.onnx.sha256
+          echo "sha256=$(cut -d' ' -f1 rfdetr-seg-medium.onnx.sha256)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: model/rfdetr-seg-medium.onnx*
+          if-no-files-found: error
+
+  image:
+    needs: [verify, model]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        id: push
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            MODEL_URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/rfdetr-seg-medium.onnx
+            MODEL_SHA256=${{ needs.model.outputs.sha256 }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image
+        run: cosign sign --yes "${REGISTRY}/${{ github.repository }}@${{ steps.push.outputs.digest }}"
+
+  release:
+    needs: [verify, binaries, model, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+          pattern: "{archive-*,model}"
+      - uses: sigstore/cosign-installer@v3
+      - name: Checksums, signature and release notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          cd artifacts
+          sha256sum hands-off-*.tar.gz rfdetr-seg-medium.onnx > SHA256SUMS
+          cosign sign-blob --yes SHA256SUMS --output-signature SHA256SUMS.sig --output-certificate SHA256SUMS.pem
+          cd ..
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: |
+            artifacts/hands-off-*.tar.gz
+            artifacts/rfdetr-seg-medium.onnx
+            artifacts/rfdetr-seg-medium.onnx.sha256
+            artifacts/SHA256SUMS
+            artifacts/SHA256SUMS.sig
+            artifacts/SHA256SUMS.pem

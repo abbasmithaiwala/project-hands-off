@@ -37,6 +37,8 @@ jobs:
           cd web
           npx playwright install --with-deps chromium
           npm run test:e2e
+      - name: Container image builds
+        run: docker build -t hands-off:ci .
       - name: API contract is up to date
         run: |
           just gen-api

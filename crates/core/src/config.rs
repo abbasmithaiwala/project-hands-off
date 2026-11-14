@@ -57,6 +57,8 @@ pub struct Config {
     pub job_timeout: Duration,
     /// Origins allowed by CORS.
     pub cors_origins: Vec<String>,
+    /// Directory holding the built web app. When set, the server serves it next to the API.
+    pub web_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -135,6 +137,7 @@ impl Config {
             },
             job_timeout: Duration::from_secs(job_timeout_secs),
             cors_origins,
+            web_dir: get("HANDS_OFF_WEB_DIR").map(PathBuf::from),
         })
     }
 }
@@ -182,6 +185,7 @@ mod tests {
         assert!(cfg.openrouter_api_key.is_none());
         assert!(cfg.rfdetr_seg_url.is_none());
         assert!(!cfg.demo_ai);
+        assert!(cfg.web_dir.is_none());
         assert_eq!(cfg.cors_origins.len(), 2);
     }
 
@@ -196,8 +200,10 @@ mod tests {
                 "https://a.example, https://b.example",
             ),
             ("OPENROUTER_API_KEY", "sk-test"),
+            ("HANDS_OFF_WEB_DIR", "/app/web"),
         ])
         .unwrap();
+        assert_eq!(cfg.web_dir, Some(PathBuf::from("/app/web")));
         assert_eq!(cfg.bind.port(), 9000);
         assert_eq!(cfg.limits.max_upload_bytes, 5 * BYTES_PER_MB);
         assert_eq!(cfg.data_dir, PathBuf::from("/var/lib/hands-off"));

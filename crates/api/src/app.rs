@@ -5,14 +5,17 @@ use axum::extract::DefaultBodyLimit;
 use axum::handler::Handler;
 use axum::http::{HeaderName, HeaderValue, Method, header};
 use axum::routing::{delete, get, post, put};
+use hands_off_core::Error;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
+use crate::error::ApiError;
 use crate::routes::{edits, health, images, jobs, objects, projects, settings};
 use crate::state::AppState;
+use crate::web;
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 /// Headroom for multipart framing on top of the configured file size limit.
@@ -73,9 +76,12 @@ pub fn router(state: AppState) -> Router {
         .route("/jobs/{id}", delete(jobs::cancel_job))
         .route("/jobs/{id}/events", get(jobs::job_events));
 
-    Router::new()
-        .nest("/api/v1", api)
-        .layer(CompressionLayer::new())
+    let app = Router::new().nest("/api/v1", api.fallback(unknown_route));
+    let app = match state.config.web_dir.as_deref().and_then(web::app) {
+        Some(site) => app.fallback_service(site),
+        None => app,
+    };
+    app.layer(CompressionLayer::new())
         .layer(hardening(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
         .layer(hardening(header::X_FRAME_OPTIONS, "DENY"))
         .layer(hardening(header::REFERRER_POLICY, "no-referrer"))
@@ -98,6 +104,11 @@ pub fn router(state: AppState) -> Router {
         )
         .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
         .with_state(state)
+}
+
+/// Unknown API paths answer with the standard JSON error, never with the web app.
+async fn unknown_route() -> ApiError {
+    Error::NotFound("route").into()
 }
 
 fn hardening(name: HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {

@@ -23,3 +23,8 @@ spike/*.pt
 spike/*.onnx
 spike/pip.log
 .venv-models
+
+# Reference footage and recordings stay out of the repository
+*.mp4
+*.mov
+*.webm

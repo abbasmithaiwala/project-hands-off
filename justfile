@@ -48,4 +48,13 @@ dev:
 serve:
     cargo run -p hands-off-api --bin hands-off
 
-check: fmt-check lint test deny build
+notices:
+    python3 scripts/third_party_notices.py
+
+notices-check:
+    python3 scripts/third_party_notices.py --check
+
+docker:
+    docker compose up --build
+
+check: fmt-check lint test deny notices-check build

@@ -1,0 +1,22 @@
+# One command to run Hands-Off:  docker compose up --build
+# Then open http://localhost:8080. Put your OpenRouter key in .env (see .env.example), or paste
+# it into the app the first time it asks.
+services:
+  hands-off:
+    build:
+      context: .
+      args:
+        MODEL_URL: ${HANDS_OFF_RFDETR_SEG_URL:-}
+        MODEL_SHA256: ${HANDS_OFF_RFDETR_SEG_SHA256:-}
+    image: ${HANDS_OFF_IMAGE:-hands-off:local}
+    ports:
+      - "${HANDS_OFF_PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - hands-off-data:/data
+    restart: unless-stopped
+
+volumes:
+  hands-off-data:

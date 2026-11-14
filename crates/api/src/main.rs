@@ -1,7 +1,7 @@
 //! Hands-Off server entry point.
 
 use anyhow::Context;
-use hands_off_api::{app, cleanup, state::AppState, telemetry};
+use hands_off_api::{app, cleanup, healthcheck, state::AppState, telemetry};
 use hands_off_core::Config;
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -14,6 +14,9 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::from_env().context("invalid configuration")?;
     let bind = config.bind;
+    if std::env::args().nth(1).as_deref() == Some("healthcheck") {
+        std::process::exit(i32::from(!healthcheck::probe(bind)));
+    }
     let state = AppState::from_config(config)
         .await
         .context("could not initialise storage")?;

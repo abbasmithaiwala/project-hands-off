@@ -1,0 +1,21 @@
+# Keep the build context small and keep secrets and weights out of every image layer.
+.git
+.github
+target
+**/node_modules
+web/dist
+web/test-results
+web/playwright-report
+data
+models
+.venv-models
+spike
+eval
+images
+1.mp4
+local.env
+.env
+.env.*
+!.env.example
+*.onnx
+*.pt
