@@ -15,6 +15,8 @@ use image::codecs::jpeg::JpegEncoder;
 use image::imageops::{self, FilterType};
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
+use crate::object_color::match_object_colors;
+
 /// Colour correction is skipped unless at least this share of the image lies outside the edit
 /// regions: with less untouched area there is nothing reliable to measure.
 const MIN_REFERENCE_SHARE: f32 = 0.02;
@@ -259,7 +261,8 @@ pub struct Composited {
 }
 
 /// Put `generated` into `original` inside `regions` (normalised boxes): resize it to match,
-/// correct its colours using the untouched area, and feather it in. Everything outside the
+/// correct its colours (using the untouched area, then the object's own original colours),
+/// and feather it in. Everything outside the
 /// regions stays identical to `original`.
 #[must_use]
 pub fn composite_edit(
@@ -272,7 +275,9 @@ pub fn composite_edit(
     let aspect_difference = aspect_difference(generated.width(), generated.height(), width, height);
     let mut fitted = fit_to(generated, width, height);
     let rects = regions_to_pixels(regions, width, height, REGION_PADDING);
-    let color_matched = match_colors(&mut fitted, &original, &rects);
+    let backdrop_matched = match_colors(&mut fitted, &original, &rects);
+    let object_matched = match_object_colors(&mut fitted, &original, &rects);
+    let color_matched = backdrop_matched || object_matched;
     let feather = (width.min(height) / FEATHER_DIVISOR).max(MIN_FEATHER_PX);
     Composited {
         image: blend(&original, &fitted, &rects, feather),

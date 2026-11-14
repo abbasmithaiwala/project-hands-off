@@ -3,6 +3,7 @@
 pub mod composite;
 pub mod crop;
 pub mod mask;
+pub mod object_color;
 
 use std::io::Cursor;
 

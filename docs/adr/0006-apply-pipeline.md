@@ -29,3 +29,6 @@ A real run (Gemini 3 Pro Image through OpenRouter, couch photo, slider at 55%) c
 - Retry and a faster draft model (`draft_generator` in settings) are cheap escape hatches when the model ignores an edit.
 - Because the generated image replaces the region wholesale, a model that changes the proportions is stretched back to fit and the activity log says so.
 - Different JPEG decoders disagree by 1-4 levels on some pixels, so a result compared against the original with another tool shows tiny differences outside the region even though our own pixels are identical.
+
+## Addendum: restoring the object's own colours
+Colour matching measured only the untouched area, which on a plain backdrop is a single colour, so it could not notice a model returning a paler object (measured on a real sofa edit: object saturation 0.84 in the original, 0.61 in the result, while the white backdrop matched). Compositing now also pulls the object's colours in each edited region back to the original's, leaving the backdrop alone (`object_color.rs`). This is valid because edits only change shape and size. The generation prompts also say to keep colour, saturation and brightness exactly.
