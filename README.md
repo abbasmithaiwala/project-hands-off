@@ -1,6 +1,6 @@
 <div align="center">
 
-# Hands-Off
+# Project Hands Off
 
 **Edit photos by dragging, not typing.**
 
