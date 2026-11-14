@@ -60,7 +60,10 @@ async fn settings_start_empty_and_never_reveal_the_key() {
         initial["openrouter"],
         json!({ "configured": false, "origin": "none" })
     );
-    assert_eq!(initial["models"]["generator"], "google/gemini-3-pro-image");
+    assert_eq!(
+        initial["models"]["generator"],
+        "google/gemini-3.1-flash-lite-image"
+    );
 
     let saved = put_json(
         &app,

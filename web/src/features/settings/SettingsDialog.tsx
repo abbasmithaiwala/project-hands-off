@@ -24,6 +24,7 @@ const MODEL_FIELDS: Array<{ key: keyof ModelSettings; label: string }> = [
 
 const SUGGESTIONS = [
   'google/gemini-3.1-flash-lite',
+  'google/gemini-3.1-flash-lite-image',
   'google/gemini-3-pro-image',
   'google/gemini-3.1-flash-image',
   'anthropic/claude-haiku-5.5',

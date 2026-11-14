@@ -179,7 +179,7 @@ impl Default for ModelSettings {
             suggester: "google/gemini-3.1-flash-lite".into(),
             ui_planner: "google/gemini-3.1-flash-lite".into(),
             summariser: "google/gemini-3.1-flash-lite".into(),
-            generator: "google/gemini-3-pro-image".into(),
+            generator: "google/gemini-3.1-flash-lite-image".into(),
             draft_generator: "google/gemini-3.1-flash-image".into(),
             fallback: "anthropic/claude-haiku-5.5".into(),
         }
