@@ -23,6 +23,7 @@ const MODEL_FIELDS: Array<{ key: keyof ModelSettings; label: string }> = [
 ]
 
 const SUGGESTIONS = [
+  'deepseek/deepseek-v4.1-flash',
   'google/gemini-3.1-flash-lite',
   'google/gemini-3.1-flash-lite-image',
   'google/gemini-3-pro-image',

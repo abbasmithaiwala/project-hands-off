@@ -243,7 +243,7 @@ async fn the_summariser_is_given_numbered_edits_with_real_numbers() {
     assert_eq!(request.schema_name, "edit_summary");
     assert_eq!(
         request.models,
-        ["google/gemini-3.1-flash-lite", "anthropic/claude-haiku-5.5"]
+        ["deepseek/deepseek-v4.1-flash", "anthropic/claude-haiku-5.5"]
     );
     insta::assert_snapshot!("summariser_user_text", request.user_text);
 }
