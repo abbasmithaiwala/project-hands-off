@@ -2,6 +2,7 @@ import type { CreateStage } from '@/features/editor/canvas/stage'
 import { LandingScreen } from '@/features/landing/LandingScreen'
 import { lazy, Suspense } from 'react'
 import { useEditorStore } from '@/state/editorStore'
+import { useProjectRoute } from './useProjectRoute'
 
 // The editor pulls in the WebGL renderer, so it is loaded only once an image is opened.
 const EditorScreen = lazy(() =>
@@ -13,6 +14,7 @@ interface AppProps {
 }
 
 export function App({ createStage }: AppProps) {
+  useProjectRoute()
   const image = useEditorStore((state) => state.image)
   if (!image) return <LandingScreen />
   return (

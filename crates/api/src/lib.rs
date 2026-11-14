@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod analysis;
 pub mod app;
+pub mod cleanup;
 pub mod detection;
 pub mod edit;
 pub mod error;

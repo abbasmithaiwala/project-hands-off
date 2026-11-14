@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   // The browser renders WebGL in software, which is slow; allow for it and keep parallelism modest.
   timeout: 90_000,
-  workers: process.env['CI'] ? 2 : 4,
+  workers: 2,
   fullyParallel: true,
   retries: process.env['CI'] ? 1 : 0,
   reporter: process.env['CI'] ? 'github' : 'list',

@@ -1,0 +1,30 @@
+.name,
+.input {
+  max-width: 200px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.name:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.input {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  outline: 2px solid var(--color-accent);
+}

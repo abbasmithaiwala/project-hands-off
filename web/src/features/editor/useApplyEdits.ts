@@ -32,6 +32,7 @@ function isEditResult(value: unknown): value is EditResult {
 export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
   const api = useApi()
   const stopListening = useRef<(() => void) | null>(null)
+  const cancelRequested = useRef(false)
 
   useEffect(() => () => stopListening.current?.(), [])
 
@@ -77,6 +78,7 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
   const run = useCallback(
     async (model?: string) => {
       const state = useEditorStore.getState()
+      cancelRequested.current = false
       state.beginApply()
       try {
         const size = { width: image.width, height: image.height }
@@ -91,6 +93,12 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
         const { job_id } = await unwrap(
           api.POST('/api/v1/images/{id}/edits', { params: { path: { id: image.id } }, body }),
         )
+        if (cancelRequested.current) {
+          await expectOk(
+            api.DELETE('/api/v1/jobs/{id}', { params: { path: { id: job_id } } }),
+          ).catch(() => undefined)
+          return
+        }
         state.setApplyJob(job_id)
         stopListening.current = subscribeToJob(job_id, handleEvent(job_id), () =>
           fail('Lost connection to the server.'),
@@ -104,6 +112,7 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
 
   const cancel = useCallback(async () => {
     const { apply, closeApply } = useEditorStore.getState()
+    cancelRequested.current = true
     stopListening.current?.()
     closeApply()
     if (apply.status === 'running' && apply.jobId) {
@@ -114,20 +123,28 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
   }, [api])
 
   const accept = useCallback(async () => {
-    const { apply, openImage } = useEditorStore.getState()
+    const { apply, addVersion } = useEditorStore.getState()
     if (apply.status !== 'review') return
     try {
       const record = await unwrap(
         api.POST('/api/v1/jobs/{id}/accept', { params: { path: { id: apply.jobId } } }),
       )
       toast.info(`Applied: ${apply.result.summary}`)
-      openImage(record)
+      addVersion(record)
     } catch (error) {
       toast.error(describeError(error))
     }
   }, [api])
 
-  const discard = useCallback(() => useEditorStore.getState().closeApply(), [])
+  const discard = useCallback(() => {
+    const { apply, closeApply } = useEditorStore.getState()
+    closeApply()
+    if (apply.status === 'review') {
+      void expectOk(
+        api.DELETE('/api/v1/jobs/{id}/result', { params: { path: { id: apply.jobId } } }),
+      ).catch(() => undefined)
+    }
+  }, [api])
 
   return { run, cancel, accept, discard }
 }

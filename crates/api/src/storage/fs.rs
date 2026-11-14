@@ -49,6 +49,14 @@ impl BlobStore for FsBlobStore {
             _ => Error::internal(e),
         })
     }
+
+    async fn remove_tree(&self, prefix: &BlobKey) -> Result<()> {
+        match fs::remove_dir_all(self.path(prefix)).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(Error::internal(e)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -82,6 +90,20 @@ mod tests {
     async fn missing_blob_is_not_found() {
         let (_dir, store) = store().await;
         let key = BlobKey::new("nope").unwrap();
+        assert!(matches!(
+            store.get(&key).await.unwrap_err(),
+            Error::NotFound(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn removes_a_tree_and_tolerates_a_missing_one() {
+        let (_dir, store) = store().await;
+        let key = BlobKey::new("jobs/one/result.png").unwrap();
+        store.put(&key, vec![1]).await.unwrap();
+        let prefix = BlobKey::new("jobs/one").unwrap();
+        store.remove_tree(&prefix).await.unwrap();
+        store.remove_tree(&prefix).await.unwrap();
         assert!(matches!(
             store.get(&key).await.unwrap_err(),
             Error::NotFound(_)

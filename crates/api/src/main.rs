@@ -1,7 +1,7 @@
 //! Hands-Off server entry point.
 
 use anyhow::Context;
-use hands_off_api::{app, state::AppState, telemetry};
+use hands_off_api::{app, cleanup, state::AppState, telemetry};
 use hands_off_core::Config;
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -17,6 +17,8 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::from_config(config)
         .await
         .context("could not initialise storage")?;
+
+    cleanup::spawn_sweeper(state.clone());
 
     let listener = TcpListener::bind(bind)
         .await

@@ -172,3 +172,47 @@ describe('editor store', () => {
     expect(state().apply).toEqual({ status: 'idle' })
   })
 })
+
+describe('versions', () => {
+  const version = (id: string): ImageRecord => ({ ...image, id })
+
+  beforeEach(() => useEditorStore.getState().reset())
+
+  it('opening a project shows its newest version', () => {
+    useEditorStore.getState().openProject([version('a'), version('b')])
+    const state = useEditorStore.getState()
+    expect(state.image?.id).toBe('b')
+    expect(state.cursor).toBe(1)
+  })
+
+  it('moving back and forth keeps every version available', () => {
+    const { openProject, goToVersion } = useEditorStore.getState()
+    openProject([version('a'), version('b'), version('c')])
+    goToVersion(0)
+    expect(useEditorStore.getState().image?.id).toBe('a')
+    goToVersion(2)
+    expect(useEditorStore.getState().image?.id).toBe('c')
+    expect(useEditorStore.getState().versions).toHaveLength(3)
+  })
+
+  it('ignores out-of-range jumps and clears pending edits when the version changes', () => {
+    const { openProject, goToVersion, setPendingEdit } = useEditorStore.getState()
+    openProject([version('a'), version('b')])
+    setPendingEdit(pending(0, 'length'))
+    goToVersion(5)
+    expect(useEditorStore.getState().pendingEdits).toHaveLength(1)
+    goToVersion(0)
+    expect(useEditorStore.getState().pendingEdits).toHaveLength(0)
+  })
+
+  it('a new edit after undoing replaces the versions that could have been redone', () => {
+    const { openProject, goToVersion, addVersion } = useEditorStore.getState()
+    openProject([version('a'), version('b'), version('c')])
+    goToVersion(0)
+    addVersion(version('d'))
+    const state = useEditorStore.getState()
+    expect(state.versions.map((v) => v.id)).toEqual(['a', 'd'])
+    expect(state.image?.id).toBe('d')
+    expect(state.cursor).toBe(1)
+  })
+})

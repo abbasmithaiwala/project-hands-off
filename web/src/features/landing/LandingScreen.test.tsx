@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '@/design/toastStore'
 import { useEditorStore } from '@/state/editorStore'
 import { apiError, image, renderWithProviders } from '@/test/utils'
@@ -23,8 +23,8 @@ describe('LandingScreen', () => {
     await userEvent.upload(screen.getByTestId('file-input'), png())
 
     await waitFor(() => expect(useEditorStore.getState().image?.id).toBe('img-1'))
-    expect(calls[0]?.key).toBe('POST /api/v1/images')
-    expect(calls[0]?.request.headers.get('content-type')).toContain('multipart/form-data')
+    const upload = calls.find((call) => call.key === 'POST /api/v1/images')
+    expect(upload?.request.headers.get('content-type')).toContain('multipart/form-data')
   })
 
   it('rejects unsupported files without calling the server', () => {
@@ -33,7 +33,7 @@ describe('LandingScreen', () => {
       target: { files: [new File(['x'], 'doc.pdf', { type: 'application/pdf' })] },
     })
     expect(useToastStore.getState().toasts[0]?.message).toMatch(/JPEG, PNG or WebP/)
-    expect(calls).toHaveLength(0)
+    expect(calls.filter((call) => call.key.startsWith('POST'))).toHaveLength(0)
     expect(useEditorStore.getState().image).toBeNull()
   })
 
@@ -67,5 +67,28 @@ describe('LandingScreen', () => {
     Object.defineProperty(event, 'clipboardData', { value: { files: [png()] } })
     window.dispatchEvent(event)
     await waitFor(() => expect(useEditorStore.getState().image).not.toBeNull())
+  })
+
+  it('opens the bundled sample photo with one click', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob(['jpeg'], { type: 'image/jpeg' }),
+      })),
+    )
+    const { calls } = renderWithProviders(<LandingScreen />, { 'POST /api/v1/images': () => image })
+    await userEvent.click(screen.getByRole('button', { name: 'Try a sample photo' }))
+    await waitFor(() => expect(useEditorStore.getState().image?.id).toBe('img-1'))
+    expect(calls.some((call) => call.key === 'POST /api/v1/images')).toBe(true)
+    vi.unstubAllGlobals()
+  })
+
+  it('credits the author of the sample photo', () => {
+    renderWithProviders(<LandingScreen />)
+    expect(screen.getByRole('link', { name: 'CC BY-SA 4.0' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('ORANGE_SOFA'),
+    )
   })
 })

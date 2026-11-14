@@ -134,4 +134,42 @@ describe('accessibility (axe)', () => {
     await screen.findByRole('dialog', { name: 'Connect OpenRouter' })
     expect(await axe(document.body)).toHaveNoViolations()
   })
+
+  it('landing with saved projects has no violations', async () => {
+    const { container } = renderWithProviders(<App />, {
+      'GET /api/v1/images': () => [{ ...image, name: 'Living room' }],
+    })
+    await screen.findByRole('button', { name: 'Open Living room' })
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('history panel, export menu and first-run tip have no violations', async () => {
+    installFakeEventSource()
+    window.localStorage.clear()
+    const stage = fakeStage()
+    const { container } = renderWithProviders(<App createStage={stage.createStage} />, routes)
+    act(() => {
+      useEditorStore.getState().openProject([
+        image,
+        {
+          ...image,
+          id: 'img-2',
+          edit: {
+            summary: 'Shortened the couch',
+            changes: [],
+            instruction: 'i',
+            model: 'm',
+            cost_usd: null,
+            generation_ms: 1,
+          },
+        },
+      ])
+      useEditorStore.getState().addObject(detectedObject(0, 'couch'))
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'History' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await screen.findByRole('complementary', { name: 'Version history' })
+    await screen.findByRole('group', { name: 'Export options' })
+    expect(await axe(container)).toHaveNoViolations()
+  })
 })

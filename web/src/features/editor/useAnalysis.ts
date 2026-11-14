@@ -4,8 +4,12 @@ import { describeError, unwrap } from '@/api/errors'
 import { subscribeToJob } from '@/api/jobEvents'
 import { useEditorStore } from '@/state/editorStore'
 
-/** Analyse an image and stream the detected objects into the editor store. */
-export function useAnalysis(imageId: string) {
+/**
+ * Analyse an image and stream the detected objects into the editor store.
+ *
+ * Changing `attempt` runs the analysis again.
+ */
+export function useAnalysis(imageId: string, attempt = 0) {
   const api = useApi()
 
   useEffect(() => {
@@ -54,5 +58,5 @@ export function useAnalysis(imageId: string) {
       cancelled = true
       stop?.()
     }
-  }, [api, imageId])
+  }, [api, imageId, attempt])
 }

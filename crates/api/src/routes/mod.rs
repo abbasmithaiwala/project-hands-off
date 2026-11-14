@@ -9,4 +9,5 @@ pub mod health;
 pub mod images;
 pub mod jobs;
 pub mod objects;
+pub mod projects;
 pub mod settings;

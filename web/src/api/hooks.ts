@@ -5,6 +5,7 @@ import { expectOk, isKeyProblem, unwrap } from './errors'
 
 export const queryKeys = {
   settings: ['settings'] as const,
+  projects: ['projects'] as const,
   properties: (imageId: string, objectId: number) => ['properties', imageId, objectId] as const,
   widget: (imageId: string, objectId: number, property: string) =>
     ['widget', imageId, objectId, property] as const,
@@ -87,5 +88,42 @@ export function useWidget(
       ),
     staleTime: Infinity,
     retry: (count, error) => count < 1 && !isKeyProblem(error),
+  })
+}
+
+export function useProjects() {
+  const api = useApi()
+  return useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => unwrap(api.GET('/api/v1/images', { params: { query: { limit: 12 } } })),
+  })
+}
+
+/** Load a saved project's version history and open it in the editor. */
+export function useOpenProject() {
+  const api = useApi()
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.GET('/api/v1/images/{id}/history', { params: { path: { id } } })),
+  })
+}
+
+export function useRenameProject() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      unwrap(api.PATCH('/api/v1/images/{id}', { params: { path: { id } }, body: { name } })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.projects }),
+  })
+}
+
+export function useDeleteProject() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      expectOk(api.DELETE('/api/v1/images/{id}', { params: { path: { id } } })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.projects }),
   })
 }

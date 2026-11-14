@@ -374,3 +374,46 @@ async fn unavailable_errors_map_to_503() {
         StatusCode::SERVICE_UNAVAILABLE
     );
 }
+
+#[tokio::test]
+async fn responses_carry_hardening_headers() {
+    let app = app().await;
+    let response = get(&app, "/api/v1/health").await;
+    assert_eq!(response.headers["x-content-type-options"], "nosniff");
+    assert_eq!(response.headers["x-frame-options"], "DENY");
+    assert_eq!(response.headers["referrer-policy"], "no-referrer");
+}
+
+#[tokio::test]
+async fn cors_preflight_allows_renaming_projects_from_a_configured_origin() {
+    let app = app_with(|config| config.cors_origins = vec!["http://localhost:5173".into()]).await;
+    let response = send(
+        &app,
+        Request::builder()
+            .method(Method::OPTIONS)
+            .uri("/api/v1/images/x")
+            .header(header::ORIGIN, "http://localhost:5173")
+            .header("access-control-request-method", "PATCH")
+            .header("access-control-request-headers", "content-type")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    let methods = response.headers["access-control-allow-methods"]
+        .to_str()
+        .unwrap();
+    assert!(methods.contains("PATCH"), "{methods}");
+
+    let stranger = send(
+        &app,
+        Request::builder()
+            .method(Method::OPTIONS)
+            .uri("/api/v1/images/x")
+            .header(header::ORIGIN, "http://evil.example")
+            .header("access-control-request-method", "PATCH")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert!(!stranger.headers.contains_key("access-control-allow-origin"));
+}

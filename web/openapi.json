@@ -29,6 +29,39 @@
       }
     },
     "/api/v1/images": {
+      "get": {
+        "tags": ["projects"],
+        "summary": "List saved projects, most recent first. Each entry is the project's latest version.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of projects to return (default 24, at most 100).",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest version of each project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageRecord"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["images"],
         "summary": "Upload an image. Re-uploading identical bytes returns the existing record.",
@@ -119,6 +152,95 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ImageRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["projects"],
+        "summary": "Delete an image, every version edited from it, and their stored files.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Unknown image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["projects"],
+        "summary": "Rename a project: every version leading to this image takes the new name.",
+        "operationId": "rename",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The renamed image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -237,6 +359,49 @@
           },
           "413": {
             "description": "Preview too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}/history": {
+      "get": {
+        "tags": ["projects"],
+        "summary": "The versions leading to an image, original first, each with what its edit changed.",
+        "operationId": "history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versions from the original to this image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageRecord"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image",
             "content": {
               "application/json": {
                 "schema": {
@@ -772,6 +937,37 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["edits"],
+        "summary": "Throw away the result of an edit that was not accepted.",
+        "operationId": "discard",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Result removed"
+          },
+          "404": {
+            "description": "No result for this job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/settings": {
@@ -1201,6 +1397,17 @@
             "format": "date-time",
             "description": "Upload time."
           },
+          "edit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EditResult",
+                "description": "What produced this version from its parent; absent for an original upload."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "format": {
             "$ref": "#/components/schemas/ImageFormat",
             "description": "Detected format."
@@ -1218,6 +1425,21 @@
           "id": {
             "$ref": "#/components/schemas/ImageId",
             "description": "Unique identifier."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Project name shared by every version of the same photo."
+          },
+          "parent_id": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ImageId",
+                "description": "The version this one was edited from; absent for an original upload."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "size_bytes": {
             "type": "integer",
@@ -1522,6 +1744,17 @@
           }
         }
       },
+      "Rename": {
+        "type": "object",
+        "description": "Body of a rename request.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The new project name (1 to 80 printable characters)."
+          }
+        }
+      },
       "SetKey": {
         "type": "object",
         "description": "Body for saving an API key.",
@@ -1646,6 +1879,10 @@
     {
       "name": "images",
       "description": "Upload and fetch images"
+    },
+    {
+      "name": "projects",
+      "description": "Saved projects, version history, rename and delete"
     },
     {
       "name": "edits",

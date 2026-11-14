@@ -108,3 +108,19 @@ Everything has a default. Set variables in the environment, in `.env`, or in `lo
 | `HANDS_OFF_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed browser origins |
 | `RUST_LOG` | `info,hands_off_api=debug` | Log verbosity |
 | `HANDS_OFF_LOG_FORMAT` | text | Set to `json` for structured logs |
+
+## Projects and history
+
+A project is a chain of image versions (ADR 0007). Accepting an edit creates a new image with `parent_id` and the `edit` that produced it.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /images?limit=` | Latest version of each saved project, newest first (default 24, at most 100). |
+| `GET /images/{id}/history` | Versions from the original to `{id}`, each with its edit summary. |
+| `PATCH /images/{id}` | Rename: `{ "name": "..." }`, 1 to 80 printable characters. Names every version up to `{id}`. |
+| `DELETE /images/{id}` | Delete the image, every version edited from it, and their files. |
+| `DELETE /jobs/{id}/result` | Discard an unaccepted edit result. |
+
+Finished edit jobs that nobody accepts are removed after 24 hours.
+
+Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`.

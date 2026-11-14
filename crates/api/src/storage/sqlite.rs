@@ -5,7 +5,7 @@ use std::path::Path;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use hands_off_core::job::{JobRecord, JobStatus};
-use hands_off_core::model::{ImageFormat, ImageRecord};
+use hands_off_core::model::{EditResult, ImageFormat, ImageRecord};
 use hands_off_core::storage::{JobFailure, ProjectStore};
 use hands_off_core::{ContentHash, Error, ErrorCode, ImageId, JobId, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow};
@@ -80,6 +80,8 @@ fn image_from_row(row: &SqliteRow) -> Result<ImageRecord> {
     let height: i64 = row.try_get("height").map_err(get)?;
     let size: i64 = row.try_get("size_bytes").map_err(get)?;
     let created: String = row.try_get("created_at").map_err(get)?;
+    let parent: Option<String> = row.try_get("parent_id").map_err(get)?;
+    let edit: Option<String> = row.try_get("edit_json").map_err(get)?;
     Ok(ImageRecord {
         id: id.parse().map_err(|_| corrupt("image id"))?,
         hash: ContentHash::new(hash).map_err(|_| corrupt("content hash"))?,
@@ -88,6 +90,13 @@ fn image_from_row(row: &SqliteRow) -> Result<ImageRecord> {
         height: u32::try_from(height).map_err(|_| corrupt("height"))?,
         size_bytes: u64::try_from(size).map_err(|_| corrupt("size"))?,
         created_at: parse_time(&created)?,
+        name: row.try_get("name").map_err(get)?,
+        parent_id: parent
+            .map(|p| p.parse().map_err(|_| corrupt("parent id")))
+            .transpose()?,
+        edit: edit
+            .map(|e| serde_json::from_str::<EditResult>(&e).map_err(|_| corrupt("edit")))
+            .transpose()?,
     })
 }
 
@@ -125,8 +134,9 @@ fn error_code_name(code: ErrorCode) -> Result<String> {
 impl ProjectStore for SqliteStore {
     async fn insert_image(&self, record: &ImageRecord) -> Result<()> {
         sqlx::query(
-            "INSERT INTO images (id, hash, format, width, height, size_bytes, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO images
+                 (id, hash, format, width, height, size_bytes, created_at, name, parent_id, edit_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(record.id.to_string())
         .bind(record.hash.as_str())
@@ -135,10 +145,118 @@ impl ProjectStore for SqliteStore {
         .bind(i64::from(record.height))
         .bind(i64::try_from(record.size_bytes).map_err(Error::internal)?)
         .bind(record.created_at.to_rfc3339())
+        .bind(record.name.as_deref())
+        .bind(record.parent_id.map(|p| p.to_string()))
+        .bind(
+            record
+                .edit
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()
+                .map_err(Error::internal)?,
+        )
         .execute(&self.pool)
         .await
         .map_err(Error::internal)?;
         Ok(())
+    }
+
+    async fn list_tips(&self, limit: u32) -> Result<Vec<ImageRecord>> {
+        let rows = sqlx::query(
+            "SELECT * FROM images
+             WHERE id NOT IN (SELECT parent_id FROM images WHERE parent_id IS NOT NULL)
+             ORDER BY created_at DESC LIMIT ?",
+        )
+        .bind(i64::from(limit))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Error::internal)?;
+        rows.iter().map(image_from_row).collect()
+    }
+
+    async fn lineage(&self, id: ImageId) -> Result<Vec<ImageRecord>> {
+        let rows = sqlx::query(
+            "WITH RECURSIVE chain(id, depth) AS (
+                 SELECT id, 0 FROM images WHERE id = ?1
+                 UNION ALL
+                 SELECT i.parent_id, chain.depth + 1
+                 FROM images i JOIN chain ON i.id = chain.id
+                 WHERE i.parent_id IS NOT NULL
+             )
+             SELECT images.* FROM images JOIN chain ON images.id = chain.id
+             ORDER BY chain.depth DESC",
+        )
+        .bind(id.to_string())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Error::internal)?;
+        rows.iter().map(image_from_row).collect()
+    }
+
+    async fn rename_lineage(&self, id: ImageId, name: &str) -> Result<()> {
+        let result = sqlx::query(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT id FROM images WHERE id = ?1
+                 UNION ALL
+                 SELECT i.parent_id FROM images i JOIN chain ON i.id = chain.id
+                 WHERE i.parent_id IS NOT NULL
+             )
+             UPDATE images SET name = ?2 WHERE id IN (SELECT id FROM chain)",
+        )
+        .bind(id.to_string())
+        .bind(name)
+        .execute(&self.pool)
+        .await
+        .map_err(Error::internal)?;
+        if result.rows_affected() == 0 {
+            return Err(Error::NotFound("image"));
+        }
+        Ok(())
+    }
+
+    async fn delete_image_tree(&self, id: ImageId) -> Result<Vec<ImageId>> {
+        let mut tx = self.pool.begin().await.map_err(Error::internal)?;
+        let rows = sqlx::query(
+            "WITH RECURSIVE tree(id) AS (
+                 SELECT id FROM images WHERE id = ?1
+                 UNION ALL
+                 SELECT i.id FROM images i JOIN tree ON i.parent_id = tree.id
+             )
+             SELECT id FROM tree",
+        )
+        .bind(id.to_string())
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(Error::internal)?;
+        // Descendants are removed by the `ON DELETE CASCADE` on `parent_id`.
+        sqlx::query("DELETE FROM images WHERE id = ?")
+            .bind(id.to_string())
+            .execute(&mut *tx)
+            .await
+            .map_err(Error::internal)?;
+        tx.commit().await.map_err(Error::internal)?;
+        rows.iter()
+            .map(|row| {
+                let raw: String = row.try_get("id").map_err(Error::internal)?;
+                raw.parse().map_err(|_| corrupt("image id"))
+            })
+            .collect()
+    }
+
+    async fn expire_jobs(&self, cutoff: DateTime<Utc>) -> Result<Vec<JobId>> {
+        let rows = sqlx::query(
+            "DELETE FROM jobs WHERE finished_at IS NOT NULL AND finished_at < ? RETURNING id",
+        )
+        .bind(cutoff.to_rfc3339())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Error::internal)?;
+        rows.iter()
+            .map(|row| {
+                let raw: String = row.try_get("id").map_err(Error::internal)?;
+                raw.parse().map_err(|_| corrupt("job id"))
+            })
+            .collect()
     }
 
     async fn image_by_id(&self, id: ImageId) -> Result<Option<ImageRecord>> {
@@ -254,6 +372,26 @@ mod tests {
             height: 480,
             size_bytes: 12_345,
             created_at: Utc::now(),
+            name: None,
+            parent_id: None,
+            edit: None,
+        }
+    }
+
+    fn version_of(parent: &ImageRecord, tag: &str) -> ImageRecord {
+        ImageRecord {
+            hash: ContentHash::new(tag.repeat(32)).unwrap(),
+            parent_id: Some(parent.id),
+            edit: Some(EditResult {
+                summary: format!("edit {tag}"),
+                changes: Vec::new(),
+                instruction: "i".into(),
+                model: "m".into(),
+                cost_usd: Some(0.1),
+                generation_ms: 5,
+            }),
+            created_at: parent.created_at + chrono::Duration::seconds(1),
+            ..image()
         }
     }
 
@@ -363,5 +501,105 @@ mod tests {
             .unwrap();
         let reopened = SqliteStore::open(&path).await.unwrap();
         assert!(reopened.image_by_id(record.id).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn lineage_lists_versions_original_first() {
+        let store = SqliteStore::in_memory().await.unwrap();
+        let root = image();
+        let mid = version_of(&root, "cd");
+        let tip = version_of(&mid, "ef");
+        for record in [&root, &mid, &tip] {
+            store.insert_image(record).await.unwrap();
+        }
+        let ids: Vec<_> = store
+            .lineage(tip.id)
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(ids, [root.id, mid.id, tip.id]);
+        let chain = store.lineage(mid.id).await.unwrap();
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain[1].edit.as_ref().unwrap().summary, "edit cd");
+    }
+
+    #[tokio::test]
+    async fn tips_exclude_versions_that_were_edited_further() {
+        let store = SqliteStore::in_memory().await.unwrap();
+        let root = image();
+        let tip = version_of(&root, "cd");
+        let mut other = image();
+        other.hash = ContentHash::new("12".repeat(32)).unwrap();
+        for record in [&root, &tip, &other] {
+            store.insert_image(record).await.unwrap();
+        }
+        let tips: Vec<_> = store
+            .list_tips(10)
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(tips.len(), 2);
+        assert!(tips.contains(&tip.id) && tips.contains(&other.id));
+        assert_eq!(store.list_tips(1).await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn renaming_covers_the_whole_chain_and_rejects_unknown_images() {
+        let store = SqliteStore::in_memory().await.unwrap();
+        let root = image();
+        let tip = version_of(&root, "cd");
+        store.insert_image(&root).await.unwrap();
+        store.insert_image(&tip).await.unwrap();
+        store.rename_lineage(tip.id, "Living room").await.unwrap();
+        for id in [root.id, tip.id] {
+            let name = store.image_by_id(id).await.unwrap().unwrap().name;
+            assert_eq!(name.as_deref(), Some("Living room"));
+        }
+        let missing = store.rename_lineage(ImageId::new(), "x").await;
+        assert!(matches!(missing.unwrap_err(), Error::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn deleting_an_image_removes_its_descendants_only() {
+        let store = SqliteStore::in_memory().await.unwrap();
+        let root = image();
+        let mid = version_of(&root, "cd");
+        let tip = version_of(&mid, "ef");
+        for record in [&root, &mid, &tip] {
+            store.insert_image(record).await.unwrap();
+        }
+        let mut removed = store.delete_image_tree(mid.id).await.unwrap();
+        removed.sort_by_key(ToString::to_string);
+        let mut expected = vec![mid.id, tip.id];
+        expected.sort_by_key(ToString::to_string);
+        assert_eq!(removed, expected);
+        assert!(store.image_by_id(root.id).await.unwrap().is_some());
+        assert!(store.image_by_id(tip.id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn only_old_finished_jobs_expire() {
+        let store = SqliteStore::in_memory().await.unwrap();
+        let (done, running) = (job(), job());
+        store.insert_job(&done).await.unwrap();
+        store.insert_job(&running).await.unwrap();
+        store
+            .finish_job(done.id, JobStatus::Completed, None)
+            .await
+            .unwrap();
+        let future = Utc::now() + chrono::Duration::hours(1);
+        assert!(
+            store
+                .expire_jobs(Utc::now() - chrono::Duration::hours(1))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(store.expire_jobs(future).await.unwrap(), [done.id]);
+        assert!(store.job_by_id(running.id).await.unwrap().is_some());
     }
 }

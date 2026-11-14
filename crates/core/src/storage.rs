@@ -1,6 +1,7 @@
 //! Storage abstractions. Implementations live in the API crate.
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 use crate::ErrorCode;
 use crate::error::{Error, Result};
@@ -71,6 +72,18 @@ impl BlobKey {
         Self(format!("jobs/{job}/result.png"))
     }
 
+    /// Prefix holding everything stored for an image.
+    #[must_use]
+    pub fn image_dir(id: ImageId) -> Self {
+        Self(format!("images/{id}"))
+    }
+
+    /// Prefix holding everything stored for a job.
+    #[must_use]
+    pub fn job_dir(job: JobId) -> Self {
+        Self(format!("jobs/{job}"))
+    }
+
     /// Key for the metadata describing an edit job's result.
     #[must_use]
     pub fn job_meta(job: JobId) -> Self {
@@ -95,6 +108,9 @@ pub trait BlobStore: Send + Sync {
     /// # Errors
     /// [`Error::NotFound`] when the key does not exist.
     async fn get(&self, key: &BlobKey) -> Result<Vec<u8>>;
+
+    /// Remove `prefix` and everything beneath it. Removing nothing is not an error.
+    async fn remove_tree(&self, prefix: &BlobKey) -> Result<()>;
 }
 
 /// Failure details recorded when a job fails.
@@ -114,6 +130,24 @@ pub trait ProjectStore: Send + Sync {
 
     /// Find an image by id.
     async fn image_by_id(&self, id: ImageId) -> Result<Option<ImageRecord>>;
+
+    /// Latest versions (images nothing was edited from), most recent first.
+    async fn list_tips(&self, limit: u32) -> Result<Vec<ImageRecord>>;
+
+    /// The version chain ending at `id`, original first.
+    async fn lineage(&self, id: ImageId) -> Result<Vec<ImageRecord>>;
+
+    /// Rename every version in the chain ending at `id`.
+    ///
+    /// # Errors
+    /// [`Error::NotFound`] when the image does not exist.
+    async fn rename_lineage(&self, id: ImageId, name: &str) -> Result<()>;
+
+    /// Delete `id` and every version edited from it, returning the removed ids.
+    async fn delete_image_tree(&self, id: ImageId) -> Result<Vec<ImageId>>;
+
+    /// Delete job records finished before `cutoff`, returning their ids.
+    async fn expire_jobs(&self, cutoff: DateTime<Utc>) -> Result<Vec<JobId>>;
 
     /// Find an image by content hash.
     async fn image_by_hash(&self, hash: &ContentHash) -> Result<Option<ImageRecord>>;

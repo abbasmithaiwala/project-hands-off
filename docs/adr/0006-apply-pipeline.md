@@ -18,7 +18,7 @@ Applying edits means turning draggable-control changes into a photoreal image. A
 
 **No mask-overlay image is sent to the model.** The runbook listed one, but the spike (ADR 0003) got acceptable edits from the original and the preview alone, and every extra image adds cost.
 
-**Results are job artifacts until accepted.** The result PNG and its metadata are stored under `jobs/{id}/`. Accepting creates a new image from it (so it can be edited further); discarding leaves nothing behind in the image list. Job artifacts are not yet cleaned up; that comes with project persistence in Phase 8.
+**Results are job artifacts until accepted.** The result PNG and its metadata are stored under `jobs/{id}/`. Accepting creates a new image from it (so it can be edited further); discarding leaves nothing behind in the image list. Unaccepted artifacts are discarded or swept after 24 hours (ADR 0007).
 
 **Failures stay recoverable.** Validation happens before the job starts, so malformed requests fail immediately and cost nothing. A failed or cancelled job leaves the pending edits in place. Content-policy blocks (HTTP 400/403/422 with moderation markers, or a model answering in words instead of an image) are reported as `refused`, are not retried on another model, and are kept apart from key and credit problems.
 

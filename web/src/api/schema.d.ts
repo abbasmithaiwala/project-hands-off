@@ -28,7 +28,8 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /** List saved projects, most recent first. Each entry is the project's latest version. */
+    get: operations['list']
     put?: never
     /** Upload an image. Re-uploading identical bytes returns the existing record. */
     post: operations['upload']
@@ -49,10 +50,12 @@ export interface paths {
     get: operations['get_image']
     put?: never
     post?: never
-    delete?: never
+    /** Delete an image, every version edited from it, and their stored files. */
+    delete: operations['delete']
     options?: never
     head?: never
-    patch?: never
+    /** Rename a project: every version leading to this image takes the new name. */
+    patch: operations['rename']
     trace?: never
   }
   '/api/v1/images/{id}/analyze': {
@@ -92,6 +95,23 @@ export interface paths {
      *     change. Follow it with the job's event stream, then fetch the result.
      */
     post: operations['apply_edits']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/images/{id}/history': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The versions leading to an image, original first, each with what its edit changed. */
+    get: operations['history']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -273,7 +293,8 @@ export interface paths {
     get: operations['get_result']
     put?: never
     post?: never
-    delete?: never
+    /** Throw away the result of an edit that was not accepted. */
+    delete: operations['discard']
     options?: never
     head?: never
     patch?: never
@@ -510,6 +531,7 @@ export interface components {
        * @description Upload time.
        */
       created_at: string
+      edit?: components['schemas']['EditResult'] | null
       /** @description Detected format. */
       format: components['schemas']['ImageFormat']
       /** @description SHA-256 of the original bytes; identical uploads share one record. */
@@ -521,6 +543,9 @@ export interface components {
       height: number
       /** @description Unique identifier. */
       id: components['schemas']['ImageId']
+      /** @description Project name shared by every version of the same photo. */
+      name?: string | null
+      parent_id?: components['schemas']['ImageId'] | null
       /**
        * Format: int64
        * @description Size of the original file in bytes.
@@ -676,6 +701,11 @@ export interface components {
       /** @description Properties, most useful first. */
       properties: components['schemas']['Property'][]
     }
+    /** @description Body of a rename request. */
+    Rename: {
+      /** @description The new project name (1 to 80 printable characters). */
+      name: string
+    }
     /** @description Body for saving an API key. */
     SetKey: {
       /** @description The OpenRouter API key. */
@@ -761,6 +791,29 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Health']
+        }
+      }
+    }
+  }
+  list: {
+    parameters: {
+      query?: {
+        /** @description Maximum number of projects to return (default 24, at most 100). */
+        limit?: number | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Latest version of each project */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageRecord'][]
         }
       }
     }
@@ -856,6 +909,81 @@ export interface operations {
       }
     }
   }
+  delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unknown image */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  rename: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Rename']
+      }
+    }
+    responses: {
+      /** @description The renamed image */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageRecord']
+        }
+      }
+      /** @description Invalid name */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+      /** @description Unknown image */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
   analyze: {
     parameters: {
       query?: never
@@ -933,6 +1061,38 @@ export interface operations {
       }
       /** @description Preview too large */
       413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  history: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Versions from the original to this image */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageRecord'][]
+        }
+      }
+      /** @description Unknown image */
+      404: {
         headers: {
           [name: string]: unknown
         }
@@ -1314,6 +1474,36 @@ export interface operations {
         content: {
           'image/png': number[]
         }
+      }
+      /** @description No result for this job */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  discard: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Job id */
+        id: components['schemas']['JobId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Result removed */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
       /** @description No result for this job */
       404: {

@@ -70,6 +70,32 @@ pub struct ImageRecord {
     pub size_bytes: u64,
     /// Upload time.
     pub created_at: DateTime<Utc>,
+    /// Project name shared by every version of the same photo.
+    pub name: Option<String>,
+    /// The version this one was edited from; absent for an original upload.
+    pub parent_id: Option<ImageId>,
+    /// What produced this version from its parent; absent for an original upload.
+    pub edit: Option<EditResult>,
+}
+
+/// Longest accepted project name, in characters.
+pub const MAX_NAME_CHARS: usize = 80;
+
+/// Trim a user-supplied project name and check it is non-empty, short and printable.
+///
+/// # Errors
+/// [`crate::Error::Validation`] when the name is empty, too long or has control characters.
+pub fn normalize_name(raw: &str) -> crate::Result<String> {
+    let name = raw.trim();
+    if name.is_empty()
+        || name.chars().count() > MAX_NAME_CHARS
+        || name.chars().any(char::is_control)
+    {
+        return Err(crate::Error::Validation(format!(
+            "name must be 1 to {MAX_NAME_CHARS} printable characters"
+        )));
+    }
+    Ok(name.to_owned())
 }
 
 /// An object found in an image.

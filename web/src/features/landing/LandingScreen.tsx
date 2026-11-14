@@ -8,6 +8,9 @@ import { toast } from '@/design/toastStore'
 import { isSupportedImage } from '@/lib/files'
 import { useEditorStore } from '@/state/editorStore'
 import styles from './LandingScreen.module.css'
+import { RecentProjects } from './RecentProjects'
+
+const SAMPLE_URL = '/sample/couch.jpg'
 
 export function LandingScreen() {
   const openImage = useEditorStore((state) => state.openImage)
@@ -38,6 +41,16 @@ export function LandingScreen() {
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
   }, [submit])
+
+  const trySample = async () => {
+    try {
+      const response = await fetch(SAMPLE_URL)
+      if (!response.ok) throw new Error('sample unavailable')
+      submit(new File([await response.blob()], 'sample-couch.jpg', { type: 'image/jpeg' }))
+    } catch {
+      toast.error('The sample photo could not be loaded. Try uploading your own.')
+    }
+  }
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault()
@@ -77,6 +90,19 @@ export function LandingScreen() {
               Choose an image
             </Button>
             <p className={styles.hint}>or drop it here, or paste from your clipboard</p>
+            <Button variant="ghost" onClick={() => void trySample()}>
+              Try a sample photo
+            </Button>
+            <p className={styles.credit}>
+              Sample by BORNTHISWAYMEDIA,{' '}
+              <a
+                href="https://commons.wikimedia.org/wiki/File:ORANGE_SOFA.jpg"
+                target="_blank"
+                rel="noreferrer"
+              >
+                CC BY-SA 4.0
+              </a>
+            </p>
           </>
         )}
 
@@ -94,6 +120,7 @@ export function LandingScreen() {
           }}
         />
       </div>
+      <RecentProjects />
     </main>
   )
 }

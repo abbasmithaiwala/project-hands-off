@@ -28,7 +28,11 @@ export function editKey(objectId: number, property: string): string {
 const MAX_LOG_LINES = 500
 
 interface EditorState {
+  /** The version being edited; always `versions[cursor]` when a project is open. */
   image: ImageRecord | null
+  /** Every version of the open project, original first. Versions after `cursor` can be redone. */
+  versions: ImageRecord[]
+  cursor: number
   objects: DetectedObject[]
   hoveredId: number | null
   selectedId: number | null
@@ -37,12 +41,17 @@ interface EditorState {
   analysisError: string | null
   log: string[]
   outputOpen: boolean
+  historyOpen: boolean
   pendingEdits: PendingEdit[]
   apply: ApplyState
 }
 
 interface EditorActions {
   openImage: (image: ImageRecord) => void
+  openProject: (versions: ImageRecord[]) => void
+  addVersion: (image: ImageRecord) => void
+  goToVersion: (index: number) => void
+  renameProject: (name: string) => void
   addObject: (object: DetectedObject) => void
   setAnalysis: (status: AnalysisStatus, error?: string) => void
   appendLog: (line: string) => void
@@ -59,11 +68,14 @@ interface EditorActions {
   finishApply: (jobId: string, result: EditResult) => void
   closeApply: () => void
   toggleOutput: () => void
+  toggleHistory: () => void
   reset: () => void
 }
 
 const initial: EditorState = {
   image: null,
+  versions: [],
+  cursor: 0,
   objects: [],
   hoveredId: null,
   selectedId: null,
@@ -72,13 +84,46 @@ const initial: EditorState = {
   analysisError: null,
   log: [],
   outputOpen: false,
+  historyOpen: false,
   pendingEdits: [],
   apply: { status: 'idle' },
 }
 
+/** Which side panels are open; kept when moving between versions of a project. */
+function panelsOf(state: EditorState): Pick<EditorState, 'outputOpen' | 'historyOpen'> {
+  return { outputOpen: state.outputOpen, historyOpen: state.historyOpen }
+}
+
 export const useEditorStore = create<EditorState & EditorActions>()((set, get) => ({
   ...initial,
-  openImage: (image) => set({ ...initial, outputOpen: get().outputOpen, image }),
+  openImage: (image) => get().openProject([image]),
+  openProject: (versions) => {
+    const image = versions.at(-1)
+    if (!image) return
+    set({ ...initial, ...panelsOf(get()), image, versions, cursor: versions.length - 1 })
+  },
+  addVersion: (image) => {
+    const { versions, cursor } = get()
+    const next = [...versions.slice(0, cursor + 1), image]
+    set({
+      ...initial,
+      ...panelsOf(get()),
+      image,
+      versions: next,
+      cursor: next.length - 1,
+    })
+  },
+  renameProject: (name) =>
+    set((state) => {
+      const named = state.versions.map((v) => ({ ...v, name }))
+      return { versions: named, image: named[state.cursor] ?? state.image }
+    }),
+  goToVersion: (index) => {
+    const { versions, cursor } = get()
+    const image = versions[index]
+    if (!image || index === cursor) return
+    set({ ...initial, ...panelsOf(get()), image, versions, cursor: index })
+  },
   addObject: (object) =>
     set((state) =>
       state.objects.some((o) => o.id === object.id)
@@ -129,5 +174,6 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   finishApply: (jobId, result) => set({ apply: { status: 'review', jobId, result } }),
   closeApply: () => set({ apply: { status: 'idle' } }),
   toggleOutput: () => set((state) => ({ outputOpen: !state.outputOpen })),
+  toggleHistory: () => set((state) => ({ historyOpen: !state.historyOpen })),
   reset: () => set({ ...initial }),
 }))

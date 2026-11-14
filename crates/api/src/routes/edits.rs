@@ -10,7 +10,7 @@ use hands_off_core::{Error, ImageId, JobId};
 
 use crate::edit;
 use crate::error::{ApiError, ApiJson, ApiPath, ErrorBody};
-use crate::ingest::ingest;
+use crate::ingest::{Origin, ingest_version};
 use crate::routes::images::JobCreated;
 use crate::state::AppState;
 
@@ -96,13 +96,42 @@ pub async fn accept(
     State(state): State<AppState>,
     ApiPath(id): ApiPath<JobId>,
 ) -> Result<(StatusCode, Json<ImageRecord>), ApiError> {
-    edit::stored_result(&state, id).await?;
+    let stored = edit::stored_result(&state, id).await?;
+    let parent = state
+        .store
+        .image_by_id(stored.image_id)
+        .await?
+        .ok_or(Error::NotFound("image"))?;
     let bytes = state.blobs.get(&BlobKey::job_result(id)).await?;
-    let (record, created) = ingest(&state, bytes).await?;
+    let origin = Origin {
+        parent,
+        edit: stored.result,
+    };
+    let (record, created) = ingest_version(&state, bytes, Some(origin)).await?;
     let status = if created {
         StatusCode::CREATED
     } else {
         StatusCode::OK
     };
     Ok((status, Json(record)))
+}
+
+/// Throw away the result of an edit that was not accepted.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/jobs/{id}/result",
+    tag = "edits",
+    params(("id" = JobId, Path, description = "Job id")),
+    responses(
+        (status = 204, description = "Result removed"),
+        (status = 404, description = "No result for this job", body = ErrorBody),
+    )
+)]
+pub async fn discard(
+    State(state): State<AppState>,
+    ApiPath(id): ApiPath<JobId>,
+) -> Result<StatusCode, ApiError> {
+    edit::stored_result(&state, id).await?;
+    state.blobs.remove_tree(&BlobKey::job_dir(id)).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

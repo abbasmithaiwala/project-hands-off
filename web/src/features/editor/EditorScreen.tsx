@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EditChange, ImageRecord } from '@/api/client'
-import { isKeyProblem } from '@/api/errors'
-import { useProperties, useSettings, useWidget } from '@/api/hooks'
+import { describeError, isKeyProblem } from '@/api/errors'
+import { useProperties, useRenameProject, useSettings, useWidget } from '@/api/hooks'
 import { toast } from '@/design/toastStore'
+import { projectName } from '@/lib/versions'
 import { describeChange, isUnchanged } from '@/lib/widgetMath'
 import { editKey, useEditorStore } from '@/state/editorStore'
+import { HistoryPanel } from '../history/HistoryPanel'
 import { ApiKeyDialog } from '../settings/ApiKeyDialog'
 import { SettingsDialog } from '../settings/SettingsDialog'
 import { ActionBar } from './ActionBar'
+import { AnalysisNotice } from './AnalysisNotice'
 import { ApplyProgress } from './ApplyProgress'
 import { CanvasStage } from './canvas/CanvasStage'
 import type { CreateStage, StageHandle } from './canvas/stage'
 import { CompareView } from './CompareView'
+import { HintBanner } from './HintBanner'
 import styles from './EditorScreen.module.css'
 import { OutputPanel } from './OutputPanel'
 import { buildPreviews, reachFor } from './previews'
@@ -20,6 +24,7 @@ import { ReviewBar } from './ReviewBar'
 import { TopBar } from './TopBar'
 import { useAnalysis } from './useAnalysis'
 import { useApplyEdits } from './useApplyEdits'
+import { useVersionHistory } from './useVersionHistory'
 import { WidgetLayer } from './widgets/WidgetLayer'
 
 interface EditorScreenProps {
@@ -29,7 +34,8 @@ interface EditorScreenProps {
 }
 
 export function EditorScreen({ image, createStage }: EditorScreenProps) {
-  useAnalysis(image.id)
+  const [attempt, setAttempt] = useState(0)
+  useAnalysis(image.id, attempt)
 
   const objects = useEditorStore((s) => s.objects)
   const hoveredId = useEditorStore((s) => s.hoveredId)
@@ -41,7 +47,12 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
   const outputOpen = useEditorStore((s) => s.outputOpen)
   const pendingEdits = useEditorStore((s) => s.pendingEdits)
   const apply = useEditorStore((s) => s.apply)
-  const { hover, select, selectNext, setActiveProperty, toggleOutput, reset } =
+  const versions = useEditorStore((s) => s.versions)
+  const cursor = useEditorStore((s) => s.cursor)
+  const history = useVersionHistory()
+  const rename = useRenameProject()
+  const historyOpen = useEditorStore((s) => s.historyOpen)
+  const { hover, select, selectNext, setActiveProperty, toggleOutput, toggleHistory, reset } =
     useEditorStore.getState()
   const { setPendingEdit, resetEdit, clearEdits } = useEditorStore.getState()
 
@@ -157,6 +168,24 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
       />
 
       <TopBar
+        projectName={projectName(image)}
+        versions={versions}
+        current={image}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
+        historyOpen={historyOpen}
+        onRename={(name) =>
+          rename.mutate(
+            { id: image.id, name },
+            {
+              onSuccess: (renamed) => useEditorStore.getState().renameProject(renamed.name ?? name),
+              onError: (error) => toast.error(describeError(error)),
+            },
+          )
+        }
+        onUndo={history.undo}
+        onRedo={history.redo}
+        onToggleHistory={toggleHistory}
         analysis={analysis}
         objectCount={objects.length}
         outputOpen={outputOpen}
@@ -207,6 +236,32 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
           />
         )}
       </div>
+
+      {editing && (
+        <HintBanner
+          context={{
+            hasObjects: objects.length > 0,
+            hasSelection: selected !== null,
+            hasActiveWidget: widget.data !== undefined && activeProperty !== null,
+            hasPendingEdits: pendingEdits.length > 0,
+          }}
+        />
+      )}
+
+      <AnalysisNotice
+        analysis={analysis}
+        objectCount={objects.length}
+        onRetry={() => setAttempt((count) => count + 1)}
+        onNewImage={reset}
+      />
+
+      {historyOpen && (
+        <HistoryPanel
+          versions={versions}
+          cursor={cursor}
+          onSelect={useEditorStore.getState().goToVersion}
+        />
+      )}
 
       {outputOpen && <OutputPanel lines={log} onClose={toggleOutput} />}
 

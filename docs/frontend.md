@@ -104,3 +104,11 @@ The canvas pixels themselves are only checked by the end-to-end and visual tests
 ## Not yet built
 
 Undo history, project persistence and cleanup of discarded results come in Phase 8.
+
+## History, projects and first run
+
+- **Versions.** The editor store holds every version of the open project and a cursor. Undo and redo (buttons, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) move the cursor; accepting an edit appends a version and drops any redo tail. Moving is disabled while an edit is applying or under review.
+- **History panel.** Lists versions newest first with their change summaries; selecting one jumps to it.
+- **Projects.** The project name in the top bar renames on click. The landing screen lists recent projects (open, or delete after confirmation). The address `#/p/<id>` reopens the project after a reload.
+- **Export.** Download the current image, or a JSON edit log built from the version history.
+- **First run.** A sample photo (credited in `public/sample/ATTRIBUTION.md`) is one click away. Two short tips (pick an object, drag the handle) appear once each and are remembered. Empty or failed analysis offers Try again or Choose another photo.

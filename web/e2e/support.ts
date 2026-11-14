@@ -63,7 +63,12 @@ const EDIT_RESULT = {
   generation_ms: 19200,
 }
 
-const ACCEPTED_IMAGE = { ...IMAGE, id: '22222222-2222-2222-2222-222222222222' }
+const ACCEPTED_IMAGE = {
+  ...IMAGE,
+  id: '22222222-2222-2222-2222-222222222222',
+  parent_id: IMAGE.id,
+  edit: EDIT_RESULT,
+}
 
 /** How the mocked edit job behaves. */
 export type EditOutcome = 'complete' | 'hang' | 'fail' | 'fail-key'
@@ -73,6 +78,9 @@ export interface Captured {
   edits: Array<Record<string, unknown>>
   cancels: number
   accepts: number
+  discards: number
+  renames: string[]
+  deletedProjects: string[]
 }
 
 export interface ApiMockOptions {
@@ -82,15 +90,51 @@ export interface ApiMockOptions {
   configured?: boolean
   /** When set, the properties route fails with this error until a key is saved. */
   needsKey?: boolean
+  /** Projects listed on the landing screen. Defaults to none. */
+  recent?: Array<Record<string, unknown>>
 }
+
+export const SAVED_PROJECT = { ...IMAGE, name: 'Living room' }
 
 /** Answers every API route with deterministic fixtures, so the UI runs without a backend. */
 export async function mockApi(page: Page, options: ApiMockOptions = {}): Promise<Captured> {
-  const captured: Captured = { edits: [], cancels: 0, accepts: 0 }
+  const captured: Captured = {
+    edits: [],
+    cancels: 0,
+    accepts: 0,
+    discards: 0,
+    renames: [],
+    deletedProjects: [],
+  }
+  let recent = [...(options.recent ?? [])]
   let keySaved = !options.needsKey
   const base = '**/api/v1'
 
-  await page.route(`${base}/images`, (route) => json(route, IMAGE, 201))
+  await page.route(/\/api\/v1\/images(\?.*)?$/, (route) =>
+    route.request().method() === 'GET' ? json(route, recent) : json(route, IMAGE, 201),
+  )
+  await page.route(`${base}/images/*`, (route) => {
+    const request = route.request()
+    if (request.method() === 'PATCH') {
+      const { name } = request.postDataJSON() as { name: string }
+      captured.renames.push(name)
+      return json(route, { ...IMAGE, name })
+    }
+    if (request.method() === 'DELETE') {
+      captured.deletedProjects.push(request.url().split('/').pop() ?? '')
+      recent = []
+      return route.fulfill({ status: 204 })
+    }
+    return json(route, IMAGE)
+  })
+  await page.route(`${base}/images/*/history`, (route) => {
+    const id = route.request().url().split('/').slice(-2)[0]
+    const versions = id === ACCEPTED_IMAGE.id ? [IMAGE, ACCEPTED_IMAGE] : [{ ...IMAGE, id }]
+    return json(route, versions)
+  })
+  await page.route(`${base}/images/*/thumbnail`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/jpeg', body: photo }),
+  )
   await page.route(`${base}/images/*/original`, (route) =>
     route.fulfill({ status: 200, contentType: 'image/jpeg', body: photo }),
   )
@@ -160,9 +204,13 @@ export async function mockApi(page: Page, options: ApiMockOptions = {}): Promise
       body: sse([...progress, ...ending]),
     })
   })
-  await page.route(`${base}/jobs/job-2/result`, (route) =>
-    route.fulfill({ status: 200, contentType: 'image/jpeg', body: afterPhoto }),
-  )
+  await page.route(`${base}/jobs/job-2/result`, (route) => {
+    if (route.request().method() === 'DELETE') {
+      captured.discards += 1
+      return route.fulfill({ status: 204 })
+    }
+    return route.fulfill({ status: 200, contentType: 'image/jpeg', body: afterPhoto })
+  })
   await page.route(`${base}/jobs/job-2/accept`, (route) => {
     captured.accepts += 1
     return json(route, ACCEPTED_IMAGE, 201)

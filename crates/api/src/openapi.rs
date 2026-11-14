@@ -9,7 +9,7 @@ use hands_off_core::{BBox, ContentHash, ErrorCode, ImageId, JobId, NormalizedPoi
 use utoipa::OpenApi;
 
 use crate::error::ErrorBody;
-use crate::routes::{edits, health, images, jobs, objects, settings};
+use crate::routes::{edits, health, images, jobs, objects, projects, settings};
 
 /// OpenAPI document for the v1 API.
 #[derive(OpenApi)]
@@ -28,6 +28,11 @@ use crate::routes::{edits, health, images, jobs, objects, settings};
         images::analyze,
         images::list_objects,
         images::get_mask,
+        projects::list,
+        projects::history,
+        projects::rename,
+        projects::delete,
+        edits::discard,
         edits::apply_edits,
         edits::get_result,
         edits::accept,
@@ -45,11 +50,12 @@ use crate::routes::{edits, health, images, jobs, objects, settings};
         Axis, BBox, ContentHash, DetectedObject, Edit, EditChange, ErrorBody, ErrorCode,
         ImageFormat, ImageId, ImageRecord, JobEvent, JobId, JobRecord, JobStatus, NormalizedPoint,
         ObjectId, Property, Widget, WidgetKind, images::JobCreated, images::UploadForm, ModelSettings, PropertyList, objects::PlanWidget, ChangeSummary, EditRequest, EditResult,
-        settings::KeyOrigin, settings::KeyStatus, settings::SetKey, settings::SettingsView,
+        projects::Rename, settings::KeyOrigin, settings::KeyStatus, settings::SetKey, settings::SettingsView,
     )),
     tags(
         (name = "system", description = "Server status"),
         (name = "images", description = "Upload and fetch images"),
+        (name = "projects", description = "Saved projects, version history, rename and delete"),
         (name = "edits", description = "Apply edits and review the result"),
         (name = "objects", description = "AI-assisted controls for detected objects"),
         (name = "settings", description = "API key and model choices"),
@@ -72,6 +78,7 @@ mod tests {
             "/api/v1/images/{id}",
             "/api/v1/images/{id}/original",
             "/api/v1/images/{id}/thumbnail",
+            "/api/v1/images/{id}/history",
             "/api/v1/images/{id}/analyze",
             "/api/v1/images/{id}/objects",
             "/api/v1/images/{id}/objects/{object_id}/mask",
