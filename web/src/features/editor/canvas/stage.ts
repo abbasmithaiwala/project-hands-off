@@ -1,3 +1,4 @@
+import { drawGuide } from '@/lib/guide'
 import {
   Application,
   Container,
@@ -45,6 +46,8 @@ export interface StageHandle {
   setPreview: (objectId: number, spec: PreviewSpec | null) => void
   /** Render the photo with the previews applied (no outlines or controls) as a PNG. */
   capturePreview: (maxSide: number) => Promise<Blob | null>
+  /** Render the original photo with each shape (points in `0..1`) drawn over it as a PNG. */
+  captureGuide: (maxSide: number, shapes: readonly (readonly Point[])[]) => Promise<Blob | null>
   fit: () => void
   zoomBy: (factor: number) => void
   destroy: () => void
@@ -450,6 +453,20 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
           drawOverlay()
         })
         .catch(() => building.delete(objectId))
+    },
+    async captureGuide(maxSide, shapes) {
+      if (!imageBitmap) return null
+      const scale = Math.min(1, maxSide / Math.max(imageSize.width, imageSize.height))
+      const width = Math.max(1, Math.round(imageSize.width * scale))
+      const height = Math.max(1, Math.round(imageSize.height * scale))
+      const guide = document.createElement('canvas')
+      guide.width = width
+      guide.height = height
+      const context = guide.getContext('2d')
+      if (!context) return null
+      context.drawImage(imageBitmap, 0, 0, width, height)
+      drawGuide(context, shapes, width, height)
+      return canvasToBlob(guide)
     },
     async capturePreview(maxSide) {
       if (!sprite) return null

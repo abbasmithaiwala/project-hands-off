@@ -1,7 +1,7 @@
 # 8. Cheaper default image generator
 
 Date: 2026-11-14
-Status: Accepted (provisional, pending benchmark)
+Status: Superseded by ADR 0009 (generator default)
 
 ## Context
 [ADR 0003](0003-image-generation-strategy.md) chose `google/gemini-3-pro-image` as the default generator: acceptable on 5/5 golden edits, but about $0.14 and 17-19 s per edit. Image output tokens dominate the cost ($120 per million). Later models in the same family are much cheaper:

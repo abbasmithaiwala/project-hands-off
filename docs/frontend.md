@@ -107,6 +107,8 @@ Undo history, project persistence and cleanup of discarded results come in Phase
 
 ## Reshaping
 
+Applying a reshape sends the original photo with the new outline drawn over it in magenta (`lib/guide.ts`), not a warped render; see ADR 0009. Sliders and handles still send the warped preview.
+
 Control points sit on the object's outline (the server snaps model-chosen points onto it). Dragging one moves only the border; the photo is not warped on screen. The warped reference image is still rendered off-screen when you press Apply so the model has geometry to follow. Sliders keep their live stretch.
 
 ## History, projects and first run

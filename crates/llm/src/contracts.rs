@@ -6,7 +6,9 @@
 use std::collections::HashSet;
 
 use hands_off_core::NormalizedPoint;
-use hands_off_core::model::{Axis, ChangeSummary, EditChange, Property, Widget, WidgetKind};
+use hands_off_core::model::{
+    Axis, ChangeSummary, EditChange, PreviewKind, Property, Widget, WidgetKind,
+};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
@@ -27,6 +29,7 @@ pub const SUMMARY_SCHEMA: &str = "edit_summary";
 pub const SUMMARISER_PROMPT_VERSION: &str = "v1";
 /// System prompt for the summariser.
 pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v1.md");
+const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v1.md");
 const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v1.md");
 const GENERATOR_WITHOUT_PREVIEW: &str =
     include_str!("../../../prompts/generator-without-preview.v1.md");
@@ -441,15 +444,33 @@ pub fn parse_edit_summary(content: &str, lines: &[EditLine<'_>]) -> Result<EditS
     })
 }
 
-/// The full text sent to the image model for `instruction`.
+/// The full text sent to the image model.
+///
+/// `reference` is what the second image shows, if one is sent. With an outline, the model is
+/// told which `objects` to reshape and `instruction` is not used: the drawn line carries the
+/// geometry, and numbers in words only pull it away from the picture.
 #[must_use]
-pub fn generation_instruction(instruction: &str, with_preview: bool) -> String {
-    let template = if with_preview {
-        GENERATOR_WITH_PREVIEW
-    } else {
-        GENERATOR_WITHOUT_PREVIEW
-    };
-    template.trim().replace("{instruction}", instruction.trim())
+pub fn generation_instruction(
+    instruction: &str,
+    objects: &[&str],
+    reference: Option<PreviewKind>,
+) -> String {
+    match reference {
+        Some(PreviewKind::Outline) => {
+            let names = match objects {
+                [] => "object".to_owned(),
+                [only] => (*only).to_owned(),
+                [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+            };
+            GENERATOR_WITH_OUTLINE.trim().replace("{objects}", &names)
+        }
+        Some(PreviewKind::Warped) => GENERATOR_WITH_PREVIEW
+            .trim()
+            .replace("{instruction}", instruction.trim()),
+        None => GENERATOR_WITHOUT_PREVIEW
+            .trim()
+            .replace("{instruction}", instruction.trim()),
+    }
 }
 
 /// Maps a point from crop coordinates into image coordinates, clamping to the image.
@@ -980,12 +1001,28 @@ mod tests {
 
     #[test]
     fn the_generation_text_depends_on_whether_there_is_a_preview() {
-        let with = generation_instruction("Shorten the sofa.", true);
+        let with = generation_instruction("Shorten the sofa.", &[], Some(PreviewKind::Warped));
         assert!(with.contains("Shorten the sofa.") && with.contains("second image"));
         assert!(with.contains("identical to the original"));
-        let without = generation_instruction("Shorten the sofa.", false);
+        let without = generation_instruction("Shorten the sofa.", &[], None);
         assert!(without.contains("Shorten the sofa.") && !without.contains("second image"));
         assert!(!with.contains("{instruction}") && !without.contains("{instruction}"));
+    }
+
+    #[test]
+    fn an_outline_reference_names_the_objects_and_ignores_the_wording() {
+        let text = generation_instruction(
+            "point 3 moved from 10% to 20%",
+            &["bottle"],
+            Some(PreviewKind::Outline),
+        );
+        assert!(text.contains("magenta outline drawn around the bottle"));
+        assert!(text.contains("do not draw them in the result"));
+        assert!(!text.contains("point 3") && !text.contains('{'));
+
+        let several =
+            generation_instruction("", &["bottle", "cup", "vase"], Some(PreviewKind::Outline));
+        assert!(several.contains("bottle, cup and vase"), "{several}");
     }
 
     #[test]

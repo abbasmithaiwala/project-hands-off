@@ -1,4 +1,4 @@
-import type { BBox, DetectedObject, Edit, EditChange, Widget } from '@/api/client'
+import type { BBox, DetectedObject, Edit, EditChange, PreviewKind, Widget } from '@/api/client'
 import { affectedRegion } from '@/lib/regions'
 import {
   compose,
@@ -121,4 +121,21 @@ export function affectedRegions(
     if (deformations.length > 0) regions.push(affectedRegion(object, compose(deformations), size))
   }
   return regions
+}
+
+/**
+ * What to show the image model alongside the photo. Reshaping with control points is best
+ * explained by drawing the new outline; everything else (sliders, handles) by a warped preview.
+ */
+export function referenceKind(edits: readonly PendingEdit[]): PreviewKind {
+  const reshapesOnly =
+    edits.length > 0 && edits.every((e) => e.edit.change.kind === 'control_points')
+  return reshapesOnly ? 'outline' : 'warped'
+}
+
+/** The new outline of each reshaped object, in `0..1` image coordinates. */
+export function outlineShapes(edits: readonly PendingEdit[]): Point[][] {
+  return edits.flatMap((e) =>
+    e.edit.change.kind === 'control_points' ? [e.edit.change.target.map((p) => ({ ...p }))] : [],
+  )
 }

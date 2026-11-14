@@ -45,6 +45,26 @@ test('applying sends the typed edits, the affected region and the on-screen prev
   expect(request).not.toHaveProperty('model')
 })
 
+test('reshaping sends the new outline drawn on the photo instead of a warped preview', async ({
+  page,
+}) => {
+  const captured = await mockApi(page)
+  await openEditor(page)
+  await clickCouch(page)
+  await page.getByRole('button', { name: 'Armrest contour' }).click()
+  const handle = page.getByRole('button', { name: /Armrest contour point 1 of/ })
+  await handle.focus()
+  for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft')
+  await page.getByRole('button', { name: 'Apply' }).click()
+  await expect(page.getByRole('region', { name: 'Review your edit' })).toBeVisible()
+
+  const [request] = captured.edits as [Record<string, any>]
+  expect(request.preview_kind).toBe('outline')
+  const png = Buffer.from(request.preview_png as string, 'base64')
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(png.length).toBeGreaterThan(10_000)
+})
+
 test('the result can be reviewed against the original, then accepted as a new image', async ({
   page,
 }) => {

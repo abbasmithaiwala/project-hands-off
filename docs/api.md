@@ -18,7 +18,9 @@ CI runs the same command and fails if the committed files differ.
 
 - All routes live under `/api/v1`.
 - Coordinates are normalised to `0.0..=1.0` with the origin at the top-left, so previews and full-resolution images never disagree.
-- Every response carries an `x-request-id` header that also appears in the server logs.
+- `POST /images/{id}/edits` accepts `preview_png` together with `preview_kind`: `warped` (default; a rough render of the moved object) or `outline` (the original photo with the new silhouette drawn over it, used when every edit reshapes with control points).
+
+Every response carries an `x-request-id` header that also appears in the server logs.
 - Errors are JSON `{ "code": string, "message": string }`. Codes are stable; messages are for humans.
 
 | Code | HTTP status | Meaning |

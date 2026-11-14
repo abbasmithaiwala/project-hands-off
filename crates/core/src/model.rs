@@ -179,7 +179,7 @@ impl Default for ModelSettings {
             suggester: "google/gemini-3.1-flash-lite".into(),
             ui_planner: "google/gemini-3.1-flash-lite".into(),
             summariser: "google/gemini-3.1-flash-lite".into(),
-            generator: "google/gemini-3.1-flash-lite-image".into(),
+            generator: "google/gemini-3.1-flash-image".into(),
             draft_generator: "google/gemini-3.1-flash-image".into(),
             fallback: "anthropic/claude-haiku-5.5".into(),
         }
@@ -221,6 +221,19 @@ impl ModelSettings {
     }
 }
 
+/// What the reference image sent with an edit shows.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewKind {
+    /// A rough render of the object moved to its new place, to be reproduced.
+    #[default]
+    Warped,
+    /// The original photo with the object's new silhouette drawn over it as a line.
+    Outline,
+}
+
 /// A request to apply a batch of edits to an image.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct EditRequest {
@@ -230,9 +243,12 @@ pub struct EditRequest {
     /// Only pixels inside these boxes may change. When empty, the edited objects' boxes are used.
     #[serde(default)]
     pub regions: Vec<BBox>,
-    /// Base64 PNG of the rough warped preview, used as a geometry reference for the model.
+    /// Base64 PNG used as a geometry reference for the model; see `preview_kind`.
     #[serde(default)]
     pub preview_png: Option<String>,
+    /// What `preview_png` shows. Defaults to a warped render of the edited objects.
+    #[serde(default)]
+    pub preview_kind: PreviewKind,
     /// Image model to use instead of the configured generator.
     #[serde(default)]
     pub model: Option<String>,
@@ -431,7 +447,10 @@ mod tests {
     fn edit_requests_default_their_optional_fields() {
         let request: EditRequest = serde_json::from_str(r#"{"edits":[]}"#).unwrap();
         assert!(
-            request.regions.is_empty() && request.preview_png.is_none() && request.model.is_none()
+            request.regions.is_empty()
+                && request.preview_png.is_none()
+                && request.preview_kind == PreviewKind::Warped
+                && request.model.is_none()
         );
     }
 

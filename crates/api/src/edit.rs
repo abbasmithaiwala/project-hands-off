@@ -169,6 +169,17 @@ fn changed_regions(request: &EditRequest, objects: &[DetectedObject]) -> Vec<BBo
     regions
 }
 
+/// The labels of the edited objects, each once, in edit order.
+fn edited_labels(objects: &[DetectedObject]) -> Vec<&str> {
+    let mut labels: Vec<&str> = Vec::new();
+    for object in objects {
+        if !labels.contains(&object.label.as_str()) {
+            labels.push(&object.label);
+        }
+    }
+    labels
+}
+
 fn seconds(ms: u64) -> String {
     format!("{:.1}s", std::time::Duration::from_millis(ms).as_secs_f64())
 }
@@ -262,7 +273,11 @@ pub async fn execute(
         .generator
         .generate(ImageRequest {
             models: vec![primary, models.fallback],
-            instruction: generation_instruction(&summary.instruction, inputs.preview.is_some()),
+            instruction: generation_instruction(
+                &summary.instruction,
+                &edited_labels(&objects),
+                inputs.preview.is_some().then_some(request.preview_kind),
+            ),
             original: ImageInput {
                 mime: "image/jpeg",
                 bytes: inputs.original,

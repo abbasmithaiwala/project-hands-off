@@ -457,7 +457,9 @@ export interface components {
       edits: components['schemas']['Edit'][]
       /** @description Image model to use instead of the configured generator. */
       model?: string | null
-      /** @description Base64 PNG of the rough warped preview, used as a geometry reference for the model. */
+      /** @description What `preview_png` shows. Defaults to a warped render of the edited objects. */
+      preview_kind?: components['schemas']['PreviewKind']
+      /** @description Base64 PNG used as a geometry reference for the model; see `preview_kind`. */
       preview_png?: string | null
       /**
        * @description For each affected area of the image, the box it covers before and after the edits.
@@ -687,6 +689,11 @@ export interface components {
       /** @description A property key returned by the properties route. */
       property: string
     }
+    /**
+     * @description What the reference image sent with an edit shows.
+     * @enum {string}
+     */
+    PreviewKind: 'warped' | 'outline'
     /** @description An editable property of an object. */
     Property: {
       /** @description Stable key, for example `length`. */

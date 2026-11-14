@@ -7,7 +7,7 @@ import { toast } from '@/design/toastStore'
 import { blobToBase64 } from '@/lib/base64'
 import { useEditorStore } from '@/state/editorStore'
 import type { StageHandle } from './canvas/stage'
-import { affectedRegions, requestEdits } from './previews'
+import { affectedRegions, outlineShapes, referenceKind, requestEdits } from './previews'
 
 /** The preview sent to the model is capped at this size on its longest side. */
 const PREVIEW_MAX_SIDE = 1280
@@ -82,12 +82,19 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
       state.beginApply()
       try {
         const size = { width: image.width, height: image.height }
-        const blob = await stageRef.current?.capturePreview(PREVIEW_MAX_SIDE)
+        const kind = referenceKind(state.pendingEdits)
+        const blob =
+          kind === 'outline'
+            ? await stageRef.current?.captureGuide(
+                PREVIEW_MAX_SIDE,
+                outlineShapes(state.pendingEdits),
+              )
+            : await stageRef.current?.capturePreview(PREVIEW_MAX_SIDE)
         const previewPng = blob ? await blobToBase64(blob) : null
         const body: EditRequest = {
           edits: requestEdits(state.pendingEdits),
           regions: affectedRegions(state.pendingEdits, state.objects, size),
-          ...(previewPng ? { preview_png: previewPng } : {}),
+          ...(previewPng ? { preview_png: previewPng, preview_kind: kind } : {}),
           ...(model ? { model } : {}),
         }
         const { job_id } = await unwrap(

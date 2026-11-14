@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { EditChange, Widget } from '@/api/client'
 import { editKey, type PendingEdit } from '@/state/editorStore'
 import { detectedObject } from '@/test/utils'
-import { affectedRegions, buildPreviews, deformationFor, reachFor, requestEdits } from './previews'
+import {
+  affectedRegions,
+  buildPreviews,
+  deformationFor,
+  outlineShapes,
+  reachFor,
+  referenceKind,
+  requestEdits,
+} from './previews'
 
 const size = { width: 1000, height: 500 }
 const bbox = { x: 0.2, y: 0.2, width: 0.5, height: 0.5 }
@@ -174,5 +182,54 @@ describe('affectedRegions', () => {
       affectedRegions([pending(0, slider, { kind: 'slider', value: 1 })], objects, size),
     ).toEqual([])
     expect(affectedRegions([], objects, size)).toEqual([])
+  })
+})
+
+describe('referenceKind and outlineShapes', () => {
+  const points: Widget = {
+    kind: 'control_points',
+    points: [
+      { x: 0.2, y: 0.2 },
+      { x: 0.6, y: 0.2 },
+      { x: 0.4, y: 0.6 },
+    ],
+  }
+  const reshape = (): PendingEdit =>
+    pending(0, points, {
+      kind: 'control_points',
+      origin: [
+        { x: 0.2, y: 0.2 },
+        { x: 0.6, y: 0.2 },
+        { x: 0.4, y: 0.6 },
+      ],
+      target: [
+        { x: 0.1, y: 0.2 },
+        { x: 0.7, y: 0.2 },
+        { x: 0.4, y: 0.6 },
+      ],
+    })
+  const stretch = (): PendingEdit => ({
+    ...pending(1, slider, { kind: 'slider', value: 0.7 }),
+    key: editKey(1, 'q'),
+  })
+
+  it('draws the outline when every edit reshapes with control points', () => {
+    expect(referenceKind([reshape()])).toBe('outline')
+  })
+
+  it('falls back to the warped preview for sliders, handles and mixed edits', () => {
+    expect(referenceKind([stretch()])).toBe('warped')
+    expect(referenceKind([reshape(), stretch()])).toBe('warped')
+    expect(referenceKind([])).toBe('warped')
+  })
+
+  it('collects the target points of each reshaped object', () => {
+    const [shape] = outlineShapes([reshape(), stretch()])
+    expect(shape).toEqual([
+      { x: 0.1, y: 0.2 },
+      { x: 0.7, y: 0.2 },
+      { x: 0.4, y: 0.6 },
+    ])
+    expect(outlineShapes([stretch()])).toEqual([])
   })
 })

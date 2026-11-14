@@ -62,7 +62,7 @@ async fn settings_start_empty_and_never_reveal_the_key() {
     );
     assert_eq!(
         initial["models"]["generator"],
-        "google/gemini-3.1-flash-lite-image"
+        "google/gemini-3.1-flash-image"
     );
 
     let saved = put_json(

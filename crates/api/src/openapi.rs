@@ -3,7 +3,7 @@
 use hands_off_core::job::{JobEvent, JobRecord, JobStatus};
 use hands_off_core::model::{
     Axis, ChangeSummary, DetectedObject, Edit, EditChange, EditRequest, EditResult, ImageFormat,
-    ImageRecord, ModelSettings, Property, PropertyList, Widget, WidgetKind,
+    ImageRecord, ModelSettings, PreviewKind, Property, PropertyList, Widget, WidgetKind,
 };
 use hands_off_core::{BBox, ContentHash, ErrorCode, ImageId, JobId, NormalizedPoint, ObjectId};
 use utoipa::OpenApi;
@@ -49,7 +49,7 @@ use crate::routes::{edits, health, images, jobs, objects, projects, settings};
     components(schemas(
         Axis, BBox, ContentHash, DetectedObject, Edit, EditChange, ErrorBody, ErrorCode,
         ImageFormat, ImageId, ImageRecord, JobEvent, JobId, JobRecord, JobStatus, NormalizedPoint,
-        ObjectId, Property, Widget, WidgetKind, images::JobCreated, images::UploadForm, ModelSettings, PropertyList, objects::PlanWidget, ChangeSummary, EditRequest, EditResult,
+        ObjectId, Property, Widget, WidgetKind, images::JobCreated, images::UploadForm, ModelSettings, PropertyList, objects::PlanWidget, ChangeSummary, EditRequest, EditResult, PreviewKind,
         projects::Rename, settings::KeyOrigin, settings::KeyStatus, settings::SetKey, settings::SettingsView,
     )),
     tags(

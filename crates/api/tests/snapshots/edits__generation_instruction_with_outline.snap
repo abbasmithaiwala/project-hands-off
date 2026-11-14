@@ -1,0 +1,5 @@
+---
+source: crates/api/tests/edits.rs
+expression: request.instruction
+---
+Edit the first image. The second image is the same photo with a bright magenta outline drawn around the couch; that outline is the new silhouette the couch must have. Reshape the couch so that the outer edge of each follows the magenta line exactly, keeping the material, colours, reflections and lighting photorealistic, and redraw whatever the old shape covered or the new shape uncovers so it looks natural. The magenta marks are guides only: do not draw them in the result. Everything outside the reshaped couch must stay identical to the original. Output only the full edited image with the same framing and aspect ratio as the original.

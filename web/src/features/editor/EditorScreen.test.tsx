@@ -387,8 +387,36 @@ describe('EditorScreen applying edits', () => {
     expect(body.regions).toHaveLength(1)
     expect(body.regions[0].width).toBeGreaterThan(0)
     expect(body.preview_png).toBe('iVBORw==')
+    expect(body.preview_kind).toBe('warped')
     expect(body).not.toHaveProperty('model')
     expect(context.stage.handle.capturePreview).toHaveBeenCalledWith(1280)
+    expect(context.stage.handle.captureGuide).not.toHaveBeenCalled()
+  })
+
+  it('sends the new outline, not a warped preview, when only reshaping', async () => {
+    const context = await withObjects({
+      'POST /api/v1/images/img-1/objects/0/widget': () => shape,
+      'POST /api/v1/images/img-1/edits': () => ({ job_id: 'job-2' }),
+      'GET /api/v1/settings': () => settings,
+    })
+    act(() => context.stage.callbacks().onSelect(0))
+    await userEvent.click(await screen.findByRole('button', { name: 'Outline shape' }))
+    act(() => context.stage.callbacks().onViewChange({ scale: 0.5, x: 0, y: 0 }))
+    const [first] = await screen.findAllByRole('button', { name: /Outline shape point 1 of 3/ })
+    first?.focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    await startApply(context)
+
+    const body = await editsCall(context.calls)?.json()
+    expect(body.preview_kind).toBe('outline')
+    expect(body.preview_png).toBe('iVBORw==')
+    expect(context.stage.handle.captureGuide).toHaveBeenCalledTimes(1)
+    const [side, shapes] = vi.mocked(context.stage.handle.captureGuide).mock.calls[0] ?? []
+    expect(side).toBe(1280)
+    expect(shapes).toHaveLength(1)
+    expect(shapes?.[0]).toHaveLength(3)
+    expect(shapes?.[0]?.[0]?.x).toBeLessThan(0.2)
+    expect(context.stage.handle.capturePreview).not.toHaveBeenCalled()
   })
 
   it('shows progress while generating and hides the editing controls', async () => {

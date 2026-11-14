@@ -61,6 +61,10 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
   const widget = useWidget(image.id, selected?.id ?? null, activeProperty)
   const property = properties.data?.properties.find((p) => p.key === activeProperty) ?? null
   const settings = useSettings()
+  const models = settings.data?.models
+  // A "faster draft" is only worth offering when it is a different model.
+  const draftModel =
+    models && models.draft_generator !== models.generator ? models.draft_generator : undefined
 
   const [keyRequested, setKeyRequested] = useState(false)
   const [dismissedError, setDismissedError] = useState<unknown>(null)
@@ -229,10 +233,10 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
         {apply.status === 'review' && (
           <ReviewBar
             result={apply.result}
-            draftModel={settings.data?.models.draft_generator}
+            draftModel={draftModel}
             onAccept={() => void applying.accept()}
             onRetry={() => void applying.run()}
-            onDraft={() => void applying.run(settings.data?.models.draft_generator)}
+            onDraft={() => void applying.run(draftModel)}
             onDiscard={applying.discard}
           />
         )}
