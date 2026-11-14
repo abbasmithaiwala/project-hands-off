@@ -1,0 +1,10 @@
+numpy==2.5.4
+onnx==1.23.2
+onnxruntime==1.32.0
+opencv-python-headless==5.0.0.93
+pillow==13.0.0
+requests==2.34.2
+rfdetr==1.12.1
+supervision==0.31.7
+torch==2.15.0
+ultralytics==8.4.212

@@ -13,3 +13,12 @@ test-results
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+local.env
+*.local.env
+spike/.venv
+spike/models
+spike/out
+spike/images
+spike/*.pt
+spike/*.onnx
+spike/pip.log

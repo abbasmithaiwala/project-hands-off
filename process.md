@@ -42,15 +42,15 @@ Exit: `just check` passes on a clean clone; CI is green on the first push.
 
 Goal: prove the two riskiest assumptions before building product around them. This is throwaway code in `spike/` (not part of the workspace); keep findings, not code.
 
-- [ ] **Generation quality.** Script that sends original + mask + warped preview + instruction to an OpenRouter image-edit model. Use 4-5 golden images (bottle, couch, person, burger/beer scene). Save outputs side by side.
-- [ ] **Model comparison.** Run at least 3 candidate image models. Score edit fidelity, preservation of untouched areas, realism. Record cost and latency per call.
-- [ ] **Detector export.** Export RF-DETR (Small/Medium, Apache-2.0 sizes) to ONNX; run it from Rust via `ort`. Do the same for YOLO11 and a SAM encoder/decoder.
-- [ ] **Detector benchmark.** On your Mac with CoreML and with plain CPU: latency, box quality, and SAM box-prompted mask quality on the golden images.
-- [ ] Commit the golden images and the findings to `eval/` and `docs/adr/`.
+- [x] **Generation quality.** Script that sends original + mask + warped preview + instruction to an OpenRouter image-edit model. Use 4-5 golden images (bottle, couch, person, burger/beer scene). Save outputs side by side.
+- [x] **Model comparison.** Run at least 3 candidate image models. Score edit fidelity, preservation of untouched areas, realism. Record cost and latency per call.
+- [x] **Detector export.** Export RF-DETR (Small/Medium, Apache-2.0 sizes) to ONNX; run it from Rust via `ort`. Do the same for YOLO11 and a SAM encoder/decoder.
+- [x] **Detector benchmark.** On your Mac with CoreML and with plain CPU: latency, box quality, and SAM box-prompted mask quality on the golden images.
+- [x] Commit the golden images and the findings to `eval/` and `docs/adr/`.
 
-**GATE 1 (generation):** at least one model follows geometric edits well enough on most golden images. If none do, stop and rethink the generation strategy (stronger reference-image use, tighter masks, different model class) before Phase 2.
+**GATE 1 (generation): PASSED, see ADR 0003.** at least one model follows geometric edits well enough on most golden images. If none do, stop and rethink the generation strategy (stronger reference-image use, tighter masks, different model class) before Phase 2.
 
-**GATE 2 (detector):** RF-DETR exports and runs under `ort` at acceptable speed. If not, switch the default to YOLO11 and record the AGPL implications in an ADR.
+**GATE 2 (detector): PASSED, see ADR 0004.** RF-DETR exports and runs under `ort` at acceptable speed. If not, switch the default to YOLO11 and record the AGPL implications in an ADR.
 
 Exit: both gates passed, ADRs written, default models chosen.
 
@@ -238,3 +238,4 @@ Review these at the end of every phase.
 ## Progress log
 
 - 2026-11-14: Phase 0 done. `just check` green. Switched frontend to npm and oxlint (ADR 0002): pnpm shim broken locally. `gen-api` is a stub until Phase 2.
+- 2026-11-14: Phase 1 done. Gate 1 passed: `google/gemini-3-pro-image` with a preview reference gave acceptable edits on 5/5 golden images ($0.14, ~18 s); text-only prompts and `gpt-5-image-mini` are not viable (ADR 0003). Gate 2 passed: RF-DETR-Seg Medium exports to ONNX and runs at ~0.35 s on CPU; SAM dropped from the MVP critical path (ADR 0004). Rust `ort` confirmation moves to Phase 3.

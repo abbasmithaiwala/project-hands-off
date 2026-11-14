@@ -149,29 +149,29 @@ The frontend ↔ backend contract comes in two styles. The **standard typed API 
 - Both styles are covered by the same eval set so you can compare them on identical images.
 
 ### Object detection / segmentation
-The video's outlines are **masks**, not boxes. Design choice: the **detector only supplies boxes, labels and scores; SAM produces the masks.** That keeps mask quality independent of the detector and avoids relying on newer segmentation variants.
+The video's outlines are **masks**, not boxes. The default detector is a segmentation model that returns masks directly (ADR 0004); SAM refines or extends it where needed.
 
 All detectors sit behind a Rust `Detector` trait, so they are swappable via config.
 
 | Option | Role |
 |---|---|
-| **RF-DETR Small/Medium (ONNX)**, Apache-2.0 | **Default detector.** Boxes, labels, scores for the 80 COCO classes (perfume bottle → `bottle`, beer mug → `cup`, burger → `sandwich`). Use only the Apache-2.0 sizes (Nano to Large); the XL/2XL sizes use Roboflow's platform licence |
+| **RF-DETR-Seg Medium (ONNX)**, Apache-2.0 | **Default detector and segmenter.** Boxes, masks, labels, scores for the 80 COCO classes (the perfume bottle came back as `vase`, the glass as `bowl`, burger as `sandwich`). Use only the Apache-2.0 sizes (Nano to Large); the XL/2XL sizes use Roboflow's platform licence. Use the CPU execution provider: CoreML is slower for this model |
 | **YOLO11 (det or seg, ONNX)**, AGPL-3.0 | **Optional, user-downloaded** alternative behind the same trait; never bundled. Possibly faster on plain CPU. Users take on the AGPL decision themselves |
-| **SAM 2 / MobileSAM (ONNX encoder+decoder)** | **Mask generator.** Box- or click-prompted masks for every detected object, and click-to-select for anything missed |
+| **SAM 2 / MobileSAM (ONNX encoder+decoder)** | **Optional.** Click-to-select for anything the detector missed and masks for VLM-proposed boxes. ONNX export still to be verified (Phase 3) |
 | **VLM bounding boxes → SAM** | Open-vocabulary: ask the VLM "list editable objects with boxes", feed the boxes to SAM. Covers what COCO detectors miss (cheese, foam) |
 | **Grounding DINO / OWL-ViT / Florence-2** | Local open-vocabulary alternative if you don't want VLM boxes |
 | **Pose model (RF-DETR Keypoint / RTMPose) + face landmarks (MediaPipe FaceMesh ONNX)** | v0.2: arm keypoints, expression points |
 
-Recommendation: MVP = RF-DETR boxes → SAM masks for instant results, plus VLM boxes → SAM for everything COCO misses.
+Recommendation (confirmed by the Phase 1 spike, see ADR 0004): MVP = **RF-DETR-Seg Medium** on the CPU execution provider for boxes and masks in one pass (about 0.35 s per image, cached). SAM is kept only for click-to-segment and open-vocabulary objects (VLM boxes to masks).
 
 **Why RF-DETR over YOLO11 for this project:** (1) licence: this is a self-hostable open-source tool and may run as a network service, where YOLO11's AGPL-3.0 is a problem; (2) the detector's accuracy matters less because SAM handles the masks; (3) published benchmarks favour RF-DETR on COCO accuracy, but they are Roboflow's own TensorRT/T4 numbers, so they don't tell us how it runs on laptops.
 
-**Unverified, test in the Milestone 0 spike:** RF-DETR ONNX export and `ort` output format; speed on CPU and CoreML (the heavier transformer backbone may be slower than YOLO11-n on plain CPU); mask quality of box-prompted SAM vs YOLO11-seg masks on the golden images. Switch the default to YOLO11 only if RF-DETR is too slow on CPU or its export fails, and then revisit how it is distributed because of the AGPL.
+**Verified in the Phase 1 spike (ADR 0004):** RF-DETR and RF-DETR-Seg export to ONNX and run under ONNX Runtime; box and mask quality is good on the golden images; CPU latency is 270-340 ms and CoreML is slower for RF-DETR. **Still to verify in Phase 3:** the same numbers through the Rust `ort` crate, and SAM ONNX export if click-to-segment ships.
 
 ### OpenRouter (model switching)
 - One config file maps **stage → model ID**, overridable per request from the UI:
   `suggester`, `ui_planner`, `summariser`, `generator`.
-- Use cheap, fast multimodal models for suggester and planner, a stronger model for the summariser if needed, and an image-editing-capable model for the generator. **Model IDs change quickly; look up current ones on openrouter.ai/models** rather than hard-coding.
+- Use cheap, fast multimodal models for suggester and planner, a stronger model for the summariser if needed, and an image-editing-capable model for the generator. **Spike result (ADR 0003):** default generator `google/gemini-3-pro-image` always given the warped preview as a reference ($0.14, about 18 s per call); `google/gemini-3.1-flash-image` as a faster draft option; `openai/gpt-5-image-mini` rejected because it re-renders the whole scene. **Model IDs change quickly; look up current ones on openrouter.ai/models** rather than hard-coding.
 - Use **structured outputs (JSON schema)** for suggester / planner / summariser. Image generation goes through the chat-completions endpoint with image output modalities on models that support image editing.
 - Add retries with backoff, fallback model list per stage, per-request cost and latency logging (OpenRouter returns usage).
 - The API key is stored server-side (env / encrypted DB) or supplied per session; never shipped to the browser.

@@ -1,0 +1,37 @@
+{
+  "bottle": {
+    "title": "File:Czech Glass Perfume Bottle-2.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Czech_Glass_Perfume_Bottle-2.jpg",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "artist": "<a href=\"//commons.wikimedia.org/wiki/User:Tangerineduel\" title=\"User:Tangerineduel\">Tangerineduel</a>"
+  },
+  "couch": {
+    "title": "File:ORANGE SOFA.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:ORANGE_SOFA.jpg",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "artist": "<a href=\"//commons.wikimedia.org/wiki/User:BORNTHISWAYMEDIA\" title=\"User:BORNTHISWAYMEDIA\">BORNTHISWAYMEDIA</a>"
+  },
+  "person_cup": {
+    "title": "File:Smiling woman holding a cup of beer.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Smiling_woman_holding_a_cup_of_beer.jpg",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "artist": "<a href=\"//commons.wikimedia.org/wiki/User:Basile_Morin\" title=\"User:Basile Morin\">Basile Morin</a>"
+  },
+  "burger": {
+    "title": "File:Big Mac hamburger.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Big_Mac_hamburger.jpg",
+    "license": "CC0",
+    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "artist": "<a href=\"//commons.wikimedia.org/wiki/User:Evan-Amos\" title=\"User:Evan-Amos\">Evan-Amos</a>"
+  },
+  "person_pose": {
+    "title": "File:Young Bravado.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Young_Bravado.jpg",
+    "license": "CC BY-SA 2.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "artist": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/14913305@N00\">Chris Hunkeler</a>"
+  }
+}

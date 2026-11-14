@@ -1,0 +1,452 @@
+{
+  "bottle": {
+    "rfdetr_m": {
+      "ms": 100,
+      "dets": [
+        {
+          "label": "vase",
+          "conf": 0.62,
+          "box": [
+            61,
+            26,
+            663,
+            807
+          ]
+        },
+        {
+          "label": "bottle",
+          "conf": 0.43,
+          "box": [
+            61,
+            26,
+            663,
+            807
+          ]
+        },
+        {
+          "label": "vase",
+          "conf": 0.37,
+          "box": [
+            61,
+            24,
+            661,
+            807
+          ]
+        }
+      ]
+    },
+    "rfdetr_seg_m": {
+      "ms": 108,
+      "dets": [
+        {
+          "label": "vase",
+          "conf": 0.92,
+          "box": [
+            58,
+            22,
+            659,
+            809
+          ]
+        }
+      ],
+      "has_masks": true
+    },
+    "yolo11m_seg": {
+      "ms": 536,
+      "dets": [
+        {
+          "label": "vase",
+          "conf": 0.85,
+          "box": [
+            826,
+            116,
+            1251,
+            1046
+          ]
+        },
+        {
+          "label": "vase",
+          "conf": 0.83,
+          "box": [
+            62,
+            28,
+            659,
+            807
+          ]
+        }
+      ]
+    }
+  },
+  "couch": {
+    "rfdetr_m": {
+      "ms": 74,
+      "dets": [
+        {
+          "label": "couch",
+          "conf": 0.93,
+          "box": [
+            262,
+            336,
+            869,
+            697
+          ]
+        },
+        {
+          "label": "refrigerator",
+          "conf": 0.54,
+          "box": [
+            869,
+            33,
+            1245,
+            631
+          ]
+        }
+      ]
+    },
+    "rfdetr_seg_m": {
+      "ms": 101,
+      "dets": [
+        {
+          "label": "couch",
+          "conf": 0.95,
+          "box": [
+            263,
+            333,
+            870,
+            698
+          ]
+        }
+      ],
+      "has_masks": true
+    },
+    "yolo11m_seg": {
+      "ms": 240,
+      "dets": [
+        {
+          "label": "couch",
+          "conf": 0.92,
+          "box": [
+            264,
+            335,
+            868,
+            689
+          ]
+        }
+      ]
+    }
+  },
+  "person_cup": {
+    "rfdetr_m": {
+      "ms": 115,
+      "dets": [
+        {
+          "label": "person",
+          "conf": 0.98,
+          "box": [
+            30,
+            47,
+            1264,
+            1268
+          ]
+        },
+        {
+          "label": "bowl",
+          "conf": 0.75,
+          "box": [
+            370,
+            800,
+            678,
+            989
+          ]
+        }
+      ]
+    },
+    "rfdetr_seg_m": {
+      "ms": 163,
+      "dets": [
+        {
+          "label": "person",
+          "conf": 0.98,
+          "box": [
+            29,
+            44,
+            1267,
+            1271
+          ]
+        },
+        {
+          "label": "bowl",
+          "conf": 0.68,
+          "box": [
+            371,
+            800,
+            681,
+            986
+          ]
+        }
+      ],
+      "has_masks": true
+    },
+    "yolo11m_seg": {
+      "ms": 433,
+      "dets": [
+        {
+          "label": "person",
+          "conf": 0.94,
+          "box": [
+            50,
+            39,
+            1255,
+            1277
+          ]
+        },
+        {
+          "label": "bowl",
+          "conf": 0.92,
+          "box": [
+            369,
+            802,
+            677,
+            988
+          ]
+        }
+      ]
+    }
+  },
+  "burger": {
+    "rfdetr_m": {
+      "ms": 139,
+      "dets": [
+        {
+          "label": "sandwich",
+          "conf": 0.93,
+          "box": [
+            18,
+            49,
+            1262,
+            1063
+          ]
+        }
+      ]
+    },
+    "rfdetr_seg_m": {
+      "ms": 171,
+      "dets": [
+        {
+          "label": "sandwich",
+          "conf": 0.93,
+          "box": [
+            28,
+            44,
+            1256,
+            1055
+          ]
+        }
+      ],
+      "has_masks": true
+    },
+    "yolo11m_seg": {
+      "ms": 268,
+      "dets": [
+        {
+          "label": "sandwich",
+          "conf": 0.97,
+          "box": [
+            26,
+            45,
+            1241,
+            1065
+          ]
+        }
+      ]
+    }
+  },
+  "person_pose": {
+    "rfdetr_m": {
+      "ms": 183,
+      "dets": [
+        {
+          "label": "bicycle",
+          "conf": 0.95,
+          "box": [
+            434,
+            889,
+            955,
+            1819
+          ]
+        },
+        {
+          "label": "person",
+          "conf": 0.94,
+          "box": [
+            248,
+            86,
+            1030,
+            1440
+          ]
+        },
+        {
+          "label": "truck",
+          "conf": 0.9,
+          "box": [
+            965,
+            1029,
+            1280,
+            1236
+          ]
+        },
+        {
+          "label": "car",
+          "conf": 0.82,
+          "box": [
+            1213,
+            1098,
+            1280,
+            1243
+          ]
+        },
+        {
+          "label": "car",
+          "conf": 0.48,
+          "box": [
+            0,
+            891,
+            138,
+            1169
+          ]
+        },
+        {
+          "label": "truck",
+          "conf": 0.4,
+          "box": [
+            0,
+            892,
+            138,
+            1168
+          ]
+        }
+      ]
+    },
+    "rfdetr_seg_m": {
+      "ms": 154,
+      "dets": [
+        {
+          "label": "person",
+          "conf": 0.96,
+          "box": [
+            249,
+            86,
+            1027,
+            1402
+          ]
+        },
+        {
+          "label": "bicycle",
+          "conf": 0.92,
+          "box": [
+            427,
+            885,
+            955,
+            1819
+          ]
+        },
+        {
+          "label": "truck",
+          "conf": 0.89,
+          "box": [
+            965,
+            1031,
+            1279,
+            1237
+          ]
+        },
+        {
+          "label": "car",
+          "conf": 0.77,
+          "box": [
+            1207,
+            1114,
+            1280,
+            1243
+          ]
+        },
+        {
+          "label": "car",
+          "conf": 0.5,
+          "box": [
+            0,
+            891,
+            139,
+            1167
+          ]
+        },
+        {
+          "label": "truck",
+          "conf": 0.44,
+          "box": [
+            0,
+            891,
+            139,
+            1167
+          ]
+        }
+      ],
+      "has_masks": true
+    },
+    "yolo11m_seg": {
+      "ms": 201,
+      "dets": [
+        {
+          "label": "bicycle",
+          "conf": 0.93,
+          "box": [
+            423,
+            893,
+            955,
+            1814
+          ]
+        },
+        {
+          "label": "person",
+          "conf": 0.87,
+          "box": [
+            250,
+            90,
+            1029,
+            1406
+          ]
+        },
+        {
+          "label": "truck",
+          "conf": 0.83,
+          "box": [
+            965,
+            1033,
+            1278,
+            1234
+          ]
+        },
+        {
+          "label": "car",
+          "conf": 0.68,
+          "box": [
+            1215,
+            1096,
+            1279,
+            1244
+          ]
+        },
+        {
+          "label": "truck",
+          "conf": 0.6,
+          "box": [
+            0,
+            894,
+            139,
+            1168
+          ]
+        }
+      ]
+    }
+  }
+}

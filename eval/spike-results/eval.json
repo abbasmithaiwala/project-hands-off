@@ -1,0 +1,392 @@
+[
+ [
+  "couch_shorter",
+  "google/gemini-3.1-flash-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 7.7,
+   "iou_target": 0.63,
+   "iou_source": 0.64,
+   "sec": 10.9,
+   "cost": 0.068
+  }
+ ],
+ [
+  "couch_shorter",
+  "google/gemini-3.1-flash-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 10.5,
+   "iou_target": 0.53,
+   "iou_source": 0.98,
+   "sec": 10.8,
+   "cost": 0.068
+  }
+ ],
+ [
+  "couch_shorter",
+  "google/gemini-3-pro-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.008,
+   "bg_diff": 5.4,
+   "iou_target": 0.63,
+   "iou_source": 0.77,
+   "sec": 19.2,
+   "cost": 0.141
+  }
+ ],
+ [
+  "couch_shorter",
+  "google/gemini-3-pro-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.008,
+   "bg_diff": 5.4,
+   "iou_target": 0.69,
+   "iou_source": 0.62,
+   "sec": 19.4,
+   "cost": 0.141
+  }
+ ],
+ [
+  "couch_shorter",
+  "openai/gpt-5-image-mini",
+  "text_overlay",
+  {
+   "ar_drift": 0.437,
+   "bg_diff": 52.5,
+   "iou_target": 0.31,
+   "iou_source": 0.56,
+   "sec": 51.0,
+   "cost": 0.052
+  }
+ ],
+ [
+  "couch_shorter",
+  "openai/gpt-5-image-mini",
+  "preview_ref",
+  {
+   "ar_drift": 0.437,
+   "bg_diff": 53.5,
+   "iou_target": 0.3,
+   "iou_source": 0.54,
+   "sec": 44.9,
+   "cost": 0.049
+  }
+ ],
+ [
+  "bottle_diamond",
+  "google/gemini-3.1-flash-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 4.8,
+   "iou_target": 0.64,
+   "iou_source": 0.66,
+   "sec": 10.3,
+   "cost": 0.068
+  }
+ ],
+ [
+  "bottle_diamond",
+  "google/gemini-3.1-flash-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 10.3,
+   "iou_target": 0.7,
+   "iou_source": 0.68,
+   "sec": 10.0,
+   "cost": 0.068
+  }
+ ],
+ [
+  "bottle_diamond",
+  "google/gemini-3-pro-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.007,
+   "bg_diff": 5.2,
+   "iou_target": 0.75,
+   "iou_source": 0.74,
+   "sec": 19.3,
+   "cost": 0.14
+  }
+ ],
+ [
+  "bottle_diamond",
+  "google/gemini-3-pro-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.007,
+   "bg_diff": 3.6,
+   "iou_target": 0.79,
+   "iou_source": 0.81,
+   "sec": 18.4,
+   "cost": 0.14
+  }
+ ],
+ [
+  "bottle_diamond",
+  "openai/gpt-5-image-mini",
+  "text_overlay",
+  {
+   "ar_drift": 0.163,
+   "bg_diff": 20.4,
+   "iou_target": 0.71,
+   "iou_source": 0.73,
+   "sec": 48.6,
+   "cost": 0.053
+  }
+ ],
+ [
+  "bottle_diamond",
+  "openai/gpt-5-image-mini",
+  "preview_ref",
+  {
+   "ar_drift": 0.163,
+   "bg_diff": 18.9,
+   "iou_target": 0.78,
+   "iou_source": 0.78,
+   "sec": 40.9,
+   "cost": 0.05
+  }
+ ],
+ [
+  "burger_shorter",
+  "google/gemini-3.1-flash-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": NaN,
+   "iou_target": 0.72,
+   "iou_source": 0.93,
+   "sec": 9.9,
+   "cost": 0.068
+  }
+ ],
+ [
+  "burger_shorter",
+  "google/gemini-3.1-flash-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": NaN,
+   "iou_target": 0.69,
+   "iou_source": 0.99,
+   "sec": 9.3,
+   "cost": 0.068
+  }
+ ],
+ [
+  "burger_shorter",
+  "google/gemini-3-pro-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.007,
+   "bg_diff": NaN,
+   "iou_target": 0.68,
+   "iou_source": 0.98,
+   "sec": 17.0,
+   "cost": 0.139
+  }
+ ],
+ [
+  "burger_shorter",
+  "google/gemini-3-pro-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.007,
+   "bg_diff": NaN,
+   "iou_target": 0.99,
+   "iou_source": 0.7,
+   "sec": 17.6,
+   "cost": 0.14
+  }
+ ],
+ [
+  "burger_shorter",
+  "openai/gpt-5-image-mini",
+  "text_overlay",
+  {
+   "ar_drift": 0.137,
+   "bg_diff": NaN,
+   "iou_target": 0.67,
+   "iou_source": 0.5,
+   "sec": 45.1,
+   "cost": 0.05
+  }
+ ],
+ [
+  "burger_shorter",
+  "openai/gpt-5-image-mini",
+  "preview_ref",
+  {
+   "ar_drift": 0.137,
+   "bg_diff": NaN,
+   "iou_target": 0.68,
+   "iou_source": 0.92,
+   "sec": 44.2,
+   "cost": 0.052
+  }
+ ],
+ [
+  "cup_bigger",
+  "google/gemini-3.1-flash-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 4.5,
+   "iou_target": 0.48,
+   "iou_source": 0.86,
+   "sec": 10.7,
+   "cost": 0.068
+  }
+ ],
+ [
+  "cup_bigger",
+  "google/gemini-3.1-flash-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 4.4,
+   "iou_target": 0.96,
+   "iou_source": 0.39,
+   "sec": 10.5,
+   "cost": 0.068
+  }
+ ],
+ [
+  "cup_bigger",
+  "google/gemini-3-pro-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 4.2,
+   "iou_target": 0.64,
+   "iou_source": 0.64,
+   "sec": 18.4,
+   "cost": 0.139
+  }
+ ],
+ [
+  "cup_bigger",
+  "google/gemini-3-pro-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 4.3,
+   "iou_target": 0.91,
+   "iou_source": 0.37,
+   "sec": 17.5,
+   "cost": 0.14
+  }
+ ],
+ [
+  "cup_bigger",
+  "openai/gpt-5-image-mini",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 29.0,
+   "iou_target": null,
+   "iou_source": null,
+   "sec": 47.4,
+   "cost": 0.052
+  }
+ ],
+ [
+  "cup_bigger",
+  "openai/gpt-5-image-mini",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 34.9,
+   "iou_target": 0.64,
+   "iou_source": 0.37,
+   "sec": 43.8,
+   "cost": 0.053
+  }
+ ],
+ [
+  "man_broader",
+  "google/gemini-3.1-flash-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 18.1,
+   "iou_target": 0.82,
+   "iou_source": 0.98,
+   "sec": 11.1,
+   "cost": 0.068
+  }
+ ],
+ [
+  "man_broader",
+  "google/gemini-3.1-flash-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.0,
+   "bg_diff": 18.0,
+   "iou_target": 0.98,
+   "iou_source": 0.8,
+   "sec": 8.9,
+   "cost": 0.068
+  }
+ ],
+ [
+  "man_broader",
+  "google/gemini-3-pro-image",
+  "text_overlay",
+  {
+   "ar_drift": 0.008,
+   "bg_diff": 15.9,
+   "iou_target": 0.81,
+   "iou_source": 0.98,
+   "sec": 19.1,
+   "cost": 0.14
+  }
+ ],
+ [
+  "man_broader",
+  "google/gemini-3-pro-image",
+  "preview_ref",
+  {
+   "ar_drift": 0.008,
+   "bg_diff": 15.9,
+   "iou_target": 0.9,
+   "iou_source": 0.88,
+   "sec": 17.6,
+   "cost": 0.14
+  }
+ ],
+ [
+  "man_broader",
+  "openai/gpt-5-image-mini",
+  "text_overlay",
+  {
+   "ar_drift": 0.502,
+   "bg_diff": 47.0,
+   "iou_target": 0.68,
+   "iou_source": 0.65,
+   "sec": 46.1,
+   "cost": 0.05
+  }
+ ],
+ [
+  "man_broader",
+  "openai/gpt-5-image-mini",
+  "preview_ref",
+  {
+   "ar_drift": 0.502,
+   "bg_diff": 48.3,
+   "iou_target": 0.65,
+   "iou_source": 0.56,
+   "sec": 42.2,
+   "cost": 0.049
+  }
+ ]
+]
