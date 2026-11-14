@@ -29,7 +29,7 @@ pub const SUMMARY_SCHEMA: &str = "edit_summary";
 pub const SUMMARISER_PROMPT_VERSION: &str = "v1";
 /// System prompt for the summariser.
 pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v1.md");
-const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v1.md");
+const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v2.md");
 const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v1.md");
 const GENERATOR_WITHOUT_PREVIEW: &str =
     include_str!("../../../prompts/generator-without-preview.v1.md");
