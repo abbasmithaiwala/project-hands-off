@@ -1,8 +1,11 @@
 import { act, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll } from 'vitest'
 import { useEditorStore } from '@/state/editorStore'
 import { fakeStage, image, installFakeEventSource, renderWithProviders } from '@/test/utils'
 import { App } from './App'
+
+// The editor is loaded on demand; load it once up front so tests are not at the mercy of module-loading speed.
+beforeAll(() => import('@/features/editor/EditorScreen'), 60_000)
 
 describe('App', () => {
   it('starts on the landing screen', () => {

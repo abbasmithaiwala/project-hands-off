@@ -40,7 +40,7 @@ async fn remember<T: Serialize>(state: &AppState, key: &BlobKey, value: &T) -> R
 
 /// Ask a model, validate its answer, and ask once more with the problem described if the
 /// first answer was unusable. `Ok(None)` means neither answer passed validation.
-async fn ask<T>(
+pub(crate) async fn ask<T>(
     state: &AppState,
     mut request: JsonRequest,
     validate: impl Fn(&str) -> std::result::Result<T, String>,
@@ -70,6 +70,27 @@ async fn original(state: &AppState, id: ImageId) -> Result<image::DynamicImage> 
     spawn_blocking(move || hands_off_imaging::decode_oriented(&bytes))
         .await
         .map_err(Error::internal)?
+}
+
+/// The labels of an object's suggested properties, keyed by property key. Reads the cache only
+/// and never calls a model, so it is empty for objects whose properties were never requested.
+///
+/// # Errors
+/// [`Error::Internal`] if storage fails.
+pub async fn cached_property_labels(
+    state: &AppState,
+    image: ImageId,
+    object_id: ObjectId,
+) -> Result<std::collections::HashMap<String, String>> {
+    let key = BlobKey::ai_cache(
+        image,
+        object_id,
+        &format!("properties.{SUGGESTER_PROMPT_VERSION}"),
+    )?;
+    let list = cached::<PropertyList>(state, &key).await?;
+    Ok(list
+        .map(|l| l.properties.into_iter().map(|p| (p.key, p.label)).collect())
+        .unwrap_or_default())
 }
 
 /// The editable properties for an object, from cache or a model.

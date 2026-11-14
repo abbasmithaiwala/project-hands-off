@@ -1,5 +1,6 @@
 //! Image decoding, validation, resizing and mask processing.
 
+pub mod composite;
 pub mod crop;
 pub mod mask;
 

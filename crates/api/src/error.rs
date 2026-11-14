@@ -2,10 +2,13 @@
 
 use axum::Json;
 use axum::extract::multipart::MultipartError;
+use axum::extract::rejection::{JsonRejection, PathRejection};
+use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use hands_off_core::{Error, ErrorCode};
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use utoipa::ToSchema;
 
 /// JSON body of every error response.
@@ -38,6 +41,49 @@ impl From<MultipartError> for ApiError {
     }
 }
 
+/// A JSON request body whose parse failures are reported with the standard error body.
+pub struct ApiJson<T>(pub T);
+
+impl<S: Send + Sync, T: DeserializeOwned> FromRequest<S> for ApiJson<T> {
+    type Rejection = ApiError;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, ApiError> {
+        match Json::<T>::from_request(request, state).await {
+            Ok(Json(value)) => Ok(Self(value)),
+            Err(JsonRejection::BytesRejection(rejection))
+                if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE =>
+            {
+                Err(Error::PayloadTooLarge("the request body is too large".into()).into())
+            }
+            Err(rejection) => Err(Error::Validation(format!(
+                "invalid request body: {}",
+                rejection.body_text()
+            ))
+            .into()),
+        }
+    }
+}
+
+/// A path parameter whose parse failures are reported with the standard error body.
+pub struct ApiPath<T>(pub T);
+
+impl<S: Send + Sync, T: DeserializeOwned + Send> FromRequestParts<S> for ApiPath<T> {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, ApiError> {
+        axum::extract::Path::<T>::from_request_parts(parts, state)
+            .await
+            .map(|axum::extract::Path(value)| Self(value))
+            .map_err(|rejection: PathRejection| {
+                Error::Validation(format!("invalid path parameter: {}", rejection.body_text()))
+                    .into()
+            })
+    }
+}
+
 fn status_for(code: ErrorCode) -> StatusCode {
     match code {
         ErrorCode::Validation => StatusCode::BAD_REQUEST,
@@ -47,6 +93,7 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Timeout => StatusCode::GATEWAY_TIMEOUT,
         ErrorCode::Cancelled => StatusCode::CONFLICT,
         ErrorCode::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        ErrorCode::Refused => StatusCode::UNPROCESSABLE_ENTITY,
         ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
@@ -86,6 +133,10 @@ mod tests {
         assert_eq!(
             status_for(ErrorCode::Unavailable),
             StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            status_for(ErrorCode::Refused),
+            StatusCode::UNPROCESSABLE_ENTITY
         );
         assert_eq!(
             status_for(ErrorCode::Internal),

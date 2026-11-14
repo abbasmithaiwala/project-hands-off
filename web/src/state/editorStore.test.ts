@@ -136,4 +136,39 @@ describe('editor store', () => {
   it('builds stable keys', () => {
     expect(editKey(3, 'arm_position')).toBe('3:arm_position')
   })
+
+  it('moves through the apply states', () => {
+    expect(state().apply).toEqual({ status: 'idle' })
+    state().beginApply()
+    expect(state().apply).toMatchObject({ status: 'running', jobId: null, stage: 'analysing' })
+    state().setApplyJob('job-1')
+    state().setApplyStage('generating')
+    expect(state().apply).toMatchObject({ status: 'running', jobId: 'job-1', stage: 'generating' })
+
+    const result = {
+      summary: 's',
+      changes: [],
+      instruction: 'i',
+      model: 'm',
+      cost_usd: 0.1,
+      generation_ms: 10,
+    }
+    state().finishApply('job-1', result)
+    expect(state().apply).toEqual({ status: 'review', jobId: 'job-1', result })
+
+    state().closeApply()
+    expect(state().apply).toEqual({ status: 'idle' })
+  })
+
+  it('ignores job and stage updates when nothing is running', () => {
+    state().setApplyJob('late')
+    state().setApplyStage('generating')
+    expect(state().apply).toEqual({ status: 'idle' })
+  })
+
+  it('forgets an apply in progress when a new image opens', () => {
+    state().beginApply()
+    state().openImage(image)
+    expect(state().apply).toEqual({ status: 'idle' })
+  })
 })

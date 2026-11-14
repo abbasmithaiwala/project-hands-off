@@ -1,0 +1,5 @@
+---
+source: crates/api/tests/edits.rs
+expression: request.instruction
+---
+Edit the first image. The second image is a rough, low-quality preview showing the desired new geometry (shape, size and position) of the edited object or objects; it contains artifacts, so ignore them. Make the couch about 40% shorter, keeping its left end fixed. Reproduce the geometry shown in the second image, with photorealistic texture, lighting and detail matching the first image. Everything outside the edited objects must stay identical to the original. Output only the full edited image with the same framing and aspect ratio as the original.

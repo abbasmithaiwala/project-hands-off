@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError, describeError, expectOk, isKeyProblem, unwrap } from './errors'
+import { ApiError, describeError, expectOk, isKeyProblem, mentionsApiKey, unwrap } from './errors'
 
 const response = (status = 200) => new Response(null, { status })
 
@@ -61,6 +61,14 @@ describe('isKeyProblem', () => {
     expect(isKeyProblem(new ApiError('unavailable', 'model is not installed', 503))).toBe(false)
     expect(isKeyProblem(new ApiError('not_found', 'API key', 404))).toBe(false)
     expect(isKeyProblem(new Error('API key'))).toBe(false)
+  })
+})
+
+describe('mentionsApiKey', () => {
+  it('spots messages about the key', () => {
+    expect(mentionsApiKey('An OpenRouter API key is required.')).toBe(true)
+    expect(mentionsApiKey('OpenRouter rejected the api key')).toBe(true)
+    expect(mentionsApiKey('Your account is out of credits.')).toBe(false)
   })
 })
 

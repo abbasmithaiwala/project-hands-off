@@ -1,4 +1,12 @@
-import { Application, Container, Graphics, MeshSimple, Sprite, Texture } from 'pixi.js'
+import {
+  Application,
+  Container,
+  Graphics,
+  MeshSimple,
+  RenderTexture,
+  Sprite,
+  Texture,
+} from 'pixi.js'
 import type { DetectedObject } from '@/api/client'
 import { dilate, fillMasked } from '@/lib/fill'
 import { readCssColor } from '@/lib/color'
@@ -35,6 +43,8 @@ export interface StageHandle {
   setHighlight: (hovered: number | null, selected: number | null) => void
   /** Show (or with `null`, remove) the warped preview of one object. */
   setPreview: (objectId: number, spec: PreviewSpec | null) => void
+  /** Render the photo with the previews applied (no outlines or controls) as a PNG. */
+  capturePreview: (maxSide: number) => Promise<Blob | null>
   fit: () => void
   zoomBy: (factor: number) => void
   destroy: () => void
@@ -45,6 +55,11 @@ export interface PreviewSpec {
   bbox: { x: number; y: number; width: number; height: number }
   maskUrl: string
   deform: Deformation | null
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement | OffscreenCanvas): Promise<Blob | null> {
+  if ('convertToBlob' in canvas) return canvas.convertToBlob({ type: 'image/png' })
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 }
 
 export type CreateStage = (
@@ -432,6 +447,29 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
           drawOverlay()
         })
         .catch(() => building.delete(objectId))
+    },
+    async capturePreview(maxSide) {
+      if (!sprite) return null
+      const scale = Math.min(1, maxSide / Math.max(imageSize.width, imageSize.height))
+      const target = RenderTexture.create({
+        width: Math.max(1, Math.round(imageSize.width * scale)),
+        height: Math.max(1, Math.round(imageSize.height * scale)),
+        resolution: 1,
+      })
+      const saved = { scale: world.scale.x, x: world.position.x, y: world.position.y }
+      world.scale.set(scale)
+      world.position.set(0, 0)
+      overlay.visible = false
+      try {
+        app.renderer.render({ container: world, target })
+        const canvas = app.renderer.extract.canvas({ target })
+        return await canvasToBlob(canvas as HTMLCanvasElement | OffscreenCanvas)
+      } finally {
+        world.scale.set(saved.scale)
+        world.position.set(saved.x, saved.y)
+        overlay.visible = true
+        target.destroy(true)
+      }
     },
     fit() {
       autoFit = true

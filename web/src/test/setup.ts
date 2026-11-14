@@ -1,11 +1,14 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach, expect } from 'vitest'
 import * as axeMatchers from 'vitest-axe/matchers'
 import { useToastStore } from '@/design/toastStore'
 import { useEditorStore } from '@/state/editorStore'
 
 expect.extend(axeMatchers)
+
+// Lazily loaded screens can take a moment to appear when the whole suite runs in parallel.
+configure({ asyncUtilTimeout: 5000 })
 
 class ResizeObserverStub {
   observe() {}

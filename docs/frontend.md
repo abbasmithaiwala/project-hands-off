@@ -64,7 +64,14 @@ All coordinates are normalised to the image, so an edit means the same thing at 
 - **Constraints.** Points stay inside the image and within a fraction of the object's size of where they started. Dropping a point almost where it began snaps it back. Holding Shift locks a drag to one axis.
 - **Keyboard.** Arrow keys move a focused handle (1% of the image; sliders 5%); Shift gives fine steps (0.1%; sliders 1%); Home resets it. Handles announce their label and position, for example "Shape point 3 of 8 on couch, 42 percent across, 61 percent down".
 - **Pending edits.** One edit per object and property, kept when the user switches property or object. The action bar lists them, each with a reset button; a control dragged back to where it started removes its edit. Cancel clears everything.
-- **Apply** is shown but disabled with an explanation until generation is connected.
+- **Apply** captures what is on screen (the photo with the warped previews, without outlines or controls) and sends it with the typed edits and the areas they affect. Editing is locked while it runs.
+
+## Applying and reviewing
+
+1. **Progress.** A pill names the stage (preparing, describing, generating, blending), counts seconds and offers Cancel, which abandons the model request.
+2. **Review.** The result opens over the photo with a before/after divider (drag it, or use the arrow keys, Home and End), a short change log, and the model, time and cost. The activity panel carries the full log, including the instruction sent to the model.
+3. **Choose.** Accept stores the result as a new image and re-analyses it so it can be edited further. Retry runs the same edits again; Faster draft retries with the configured draft model. Discard goes back to editing with every change intact.
+4. **Failures** (refusals, a missing key, credits, a dropped connection) appear as a message, keep the edits, and a missing key opens the key prompt.
 
 ## The live preview
 
@@ -96,4 +103,4 @@ The canvas pixels themselves are only checked by the end-to-end and visual tests
 
 ## Not yet built
 
-Applying edits (generation) is Phase 7. Undo history and project persistence come in Phase 8.
+Undo history, project persistence and cleanup of discarded results come in Phase 8.

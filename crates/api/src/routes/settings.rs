@@ -7,7 +7,7 @@ use hands_off_core::model::ModelSettings;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::error::{ApiError, ErrorBody};
+use crate::error::{ApiError, ApiJson, ErrorBody};
 use crate::settings::KeySource;
 use crate::state::AppState;
 
@@ -93,7 +93,7 @@ pub async fn get_settings(State(state): State<AppState>) -> Result<Json<Settings
 )]
 pub async fn set_key(
     State(state): State<AppState>,
-    Json(body): Json<SetKey>,
+    ApiJson(body): ApiJson<SetKey>,
 ) -> Result<StatusCode, ApiError> {
     state.settings.set_key(&body.key).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -124,7 +124,7 @@ pub async fn clear_key(State(state): State<AppState>) -> Result<StatusCode, ApiE
 )]
 pub async fn set_models(
     State(state): State<AppState>,
-    Json(models): Json<ModelSettings>,
+    ApiJson(models): ApiJson<ModelSettings>,
 ) -> Result<Json<SettingsView>, ApiError> {
     state.settings.set_models(&models).await?;
     Ok(Json(view(&state).await?))

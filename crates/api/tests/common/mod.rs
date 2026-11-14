@@ -17,7 +17,7 @@ use hands_off_api::storage::{FsBlobStore, SqliteStore};
 use hands_off_core::job::JobEvent;
 use hands_off_core::{BBox, Config, Error};
 use hands_off_imaging::mask::Mask;
-use hands_off_llm::mock::MockProvider;
+use hands_off_llm::mock::{MockGenerator, MockProvider};
 use hands_off_vision::{Detection, Detector};
 use http_body_util::BodyExt;
 use image::{ImageFormat, RgbImage};
@@ -232,4 +232,93 @@ pub async fn put_json(app: &TestApp, path: &str, body: &Value) -> Response {
             .unwrap(),
     )
     .await
+}
+
+/// An app with a fake detector, a scripted summariser and a scripted image generator.
+pub struct EditApp {
+    pub app: TestApp,
+    pub llm: Arc<MockProvider>,
+    pub generator: Arc<MockGenerator>,
+}
+
+pub async fn edit_app_with(configure: impl FnOnce(&mut Config)) -> EditApp {
+    let (mut app, _) = {
+        let mut app = app_with(configure).await;
+        let calls = Arc::new(AtomicUsize::new(0));
+        app.state = app
+            .state
+            .with_detectors(Arc::new(StaticDetector(Arc::new(FakeDetector {
+                calls: Arc::clone(&calls),
+            }))));
+        (app, calls)
+    };
+    let llm = Arc::new(MockProvider::new());
+    let generator = Arc::new(MockGenerator::new());
+    app.state = app
+        .state
+        .with_llm(Arc::clone(&llm) as Arc<dyn hands_off_llm::LlmProvider>)
+        .with_generator(Arc::clone(&generator) as Arc<dyn hands_off_llm::ImageGenerator>);
+    app.router = router(app.state.clone());
+    EditApp {
+        app,
+        llm,
+        generator,
+    }
+}
+
+pub async fn edit_app() -> EditApp {
+    edit_app_with(|_| {}).await
+}
+
+pub fn solid_png(width: u32, height: u32, colour: [u8; 3]) -> Vec<u8> {
+    let mut out = Cursor::new(Vec::new());
+    RgbImage::from_pixel(width, height, image::Rgb(colour))
+        .write_to(&mut out, ImageFormat::Png)
+        .unwrap();
+    out.into_inner()
+}
+
+/// A request that shortens object 0 (the fake couch) with a slider.
+pub fn slider_edit_body(preview: Option<&[u8]>) -> Value {
+    let mut body = serde_json::json!({
+        "edits": [{ "object_id": 0, "property": "length", "change": { "kind": "slider", "value": 0.6 } }],
+        "regions": [{ "x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5 }],
+    });
+    if let Some(bytes) = preview {
+        body["preview_png"] = Value::String(base64_encode(bytes));
+    }
+    body
+}
+
+pub fn base64_encode(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+pub const SUMMARY_JSON: &str = r#"{"instruction":"Make the couch about 40% shorter, keeping its left end fixed.","summary":"Shortened the couch","changes":[{"edit_index":0,"text":"Shortened the couch to about 60% of its length"}]}"#;
+
+/// Start an edit and collect the job's events. Returns the HTTP status and the events.
+pub async fn run_edit(
+    app: &TestApp,
+    image_id: &str,
+    body: &Value,
+) -> (StatusCode, Value, Vec<JobEvent>) {
+    let response = post_json(app, &format!("/api/v1/images/{image_id}/edits"), body).await;
+    if response.status != StatusCode::ACCEPTED {
+        return (response.status, response.json(), Vec::new());
+    }
+    let json = response.json();
+    let job: hands_off_core::JobId = json["job_id"].as_str().unwrap().parse().unwrap();
+    let events = futures::StreamExt::collect(app.state.jobs.events(job).await.unwrap()).await;
+    (response.status, json, events)
+}
+
+pub fn stages(events: &[JobEvent]) -> Vec<String> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            JobEvent::Progress { stage, .. } => Some(stage.clone()),
+            _ => None,
+        })
+        .collect()
 }

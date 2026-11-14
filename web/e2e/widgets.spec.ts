@@ -128,12 +128,3 @@ test('a pending change can be reset from the list, or all can be cancelled', asy
   await expect(page.getByRole('group', { name: 'Pending edits' })).toBeHidden()
   await expect(slider).toHaveAttribute('aria-valuenow', '100')
 })
-
-test('Apply is disabled and says why', async ({ page }) => {
-  await pick(page, 'Couch length')
-  await page.getByRole('slider', { name: /Couch length of couch/ }).focus()
-  await page.keyboard.press('ArrowLeft')
-  const apply = page.getByRole('button', { name: 'Apply' })
-  await expect(apply).toBeDisabled()
-  await expect(apply).toHaveAccessibleDescription(/not connected yet/)
-})

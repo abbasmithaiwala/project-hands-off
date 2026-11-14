@@ -37,4 +37,19 @@ for (const scheme of ['dark', 'light'] as const) {
     await page.waitForTimeout(600)
     await expect(page).toHaveScreenshot(`editing-${scheme}.png`)
   })
+
+  test(`reviewing the result @visual (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
+    await openEditor(page)
+    await clickCouch(page)
+    await page.getByRole('button', { name: 'Couch length' }).click()
+    await page.getByRole('slider', { name: /Couch length of couch/ }).focus()
+    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowLeft')
+    await page.getByRole('button', { name: 'Apply' }).click()
+    await expect(page.getByRole('region', { name: 'Review your edit' })).toBeVisible()
+    await expect(page.getByAltText('After: the edited photo')).toBeVisible()
+    await page.mouse.move(2, 2)
+    await page.waitForTimeout(600)
+    await expect(page).toHaveScreenshot(`review-${scheme}.png`)
+  })
 }

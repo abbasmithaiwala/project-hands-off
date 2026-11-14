@@ -22,6 +22,8 @@ pub enum ErrorCode {
     Cancelled,
     /// A required resource, such as a model file or API key, is not available.
     Unavailable,
+    /// The image model declined the request, for example on content-policy grounds.
+    Refused,
     /// An unexpected server-side failure.
     Internal,
 }
@@ -50,6 +52,9 @@ pub enum Error {
     /// A required resource is missing; the message says how to provide it.
     #[error("{0}")]
     Unavailable(String),
+    /// The image model declined to produce a result.
+    #[error("{0}")]
+    Refused(String),
     /// An unexpected failure; the source is logged but never shown to clients.
     #[error("internal error")]
     Internal(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -70,6 +75,7 @@ impl Error {
             Self::Timeout => ErrorCode::Timeout,
             Self::Cancelled => ErrorCode::Cancelled,
             Self::Unavailable(_) => ErrorCode::Unavailable,
+            Self::Refused(_) => ErrorCode::Refused,
             Self::Internal(_) => ErrorCode::Internal,
         }
     }
@@ -100,6 +106,7 @@ mod tests {
             (Error::Timeout, ErrorCode::Timeout),
             (Error::Cancelled, ErrorCode::Cancelled),
             (Error::Unavailable("x".into()), ErrorCode::Unavailable),
+            (Error::Refused("x".into()), ErrorCode::Refused),
             (Error::internal(std::fmt::Error), ErrorCode::Internal),
         ];
         for (error, code) in cases {

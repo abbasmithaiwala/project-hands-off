@@ -3,7 +3,7 @@
 use std::convert::Infallible;
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::Stream;
@@ -11,7 +11,7 @@ use futures::StreamExt;
 use hands_off_core::JobId;
 use hands_off_core::job::{JobEvent, JobRecord};
 
-use crate::error::{ApiError, ErrorBody};
+use crate::error::{ApiError, ApiPath, ErrorBody};
 use crate::state::AppState;
 
 fn event_name(event: &JobEvent) -> &'static str {
@@ -45,7 +45,7 @@ fn to_sse(event: &JobEvent) -> Event {
 )]
 pub async fn get_job(
     State(state): State<AppState>,
-    Path(id): Path<JobId>,
+    ApiPath(id): ApiPath<JobId>,
 ) -> Result<Json<JobRecord>, ApiError> {
     Ok(Json(state.jobs.status(id).await?))
 }
@@ -63,7 +63,7 @@ pub async fn get_job(
 )]
 pub async fn cancel_job(
     State(state): State<AppState>,
-    Path(id): Path<JobId>,
+    ApiPath(id): ApiPath<JobId>,
 ) -> Result<StatusCode, ApiError> {
     state.jobs.cancel(id).await?;
     Ok(StatusCode::ACCEPTED)
@@ -83,7 +83,7 @@ pub async fn cancel_job(
 )]
 pub async fn job_events(
     State(state): State<AppState>,
-    Path(id): Path<JobId>,
+    ApiPath(id): ApiPath<JobId>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let events = state.jobs.events(id).await?;
     Ok(Sse::new(events.map(|event| Ok(to_sse(&event)))).keep_alive(KeepAlive::default()))

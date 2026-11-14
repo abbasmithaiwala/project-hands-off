@@ -6,9 +6,9 @@ use hands_off_core::storage::{BlobStore, ProjectStore};
 use hands_off_core::{Config, Error, Result};
 use tokio::fs;
 
-use hands_off_llm::LlmProvider;
-use hands_off_llm::demo::DemoProvider;
+use hands_off_llm::demo::{DemoGenerator, DemoProvider};
 use hands_off_llm::openrouter::OpenRouterProvider;
+use hands_off_llm::{ImageGenerator, LlmProvider};
 
 use crate::detection::{DetectorProvider, LazyRfDetr};
 use crate::jobs::JobManager;
@@ -32,6 +32,8 @@ pub struct AppState {
     pub settings: Settings,
     /// Hosted language and vision models.
     pub llm: Arc<dyn LlmProvider>,
+    /// The image model that produces edited images.
+    pub generator: Arc<dyn ImageGenerator>,
 }
 
 impl AppState {
@@ -41,10 +43,11 @@ impl AppState {
         let jobs = JobManager::new(Arc::clone(&store), config.job_timeout);
         let detectors = Arc::new(LazyRfDetr::from_config(&config));
         let settings = Settings::new(config.openrouter_api_key.clone(), Arc::clone(&store));
-        let llm: Arc<dyn LlmProvider> = if config.demo_ai {
-            Arc::new(DemoProvider)
+        let (llm, generator): (Arc<dyn LlmProvider>, Arc<dyn ImageGenerator>) = if config.demo_ai {
+            (Arc::new(DemoProvider), Arc::new(DemoGenerator))
         } else {
-            Arc::new(OpenRouterProvider::new(Arc::new(settings.clone())))
+            let hosted = Arc::new(OpenRouterProvider::new(Arc::new(settings.clone())));
+            (hosted.clone(), hosted)
         };
         Self {
             config: Arc::new(config),
@@ -54,7 +57,15 @@ impl AppState {
             detectors,
             settings,
             llm,
+            generator,
         }
+    }
+
+    /// Replace the image generator (used by tests and custom setups).
+    #[must_use]
+    pub fn with_generator(mut self, generator: Arc<dyn ImageGenerator>) -> Self {
+        self.generator = generator;
+        self
     }
 
     /// Replace the model provider (used by tests and custom setups).

@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react'
 import type { DetectedObject } from '@/api/client'
 import { labelAnchor } from '@/lib/geometry'
 import { imageToScreen } from '@/lib/viewport'
@@ -15,11 +22,15 @@ interface CanvasStageProps {
   selectedId: number | null
   /** Warped previews to show, one per edited object. */
   previews: readonly ObjectPreview[]
+  /** Show the note that previews are approximate. Hidden when the result is being reviewed. */
+  showPreviewNote?: boolean
   /** Drawn over the canvas, given the current view; used for the editing controls. */
   overlay?: (context: { view: Viewport; imageSize: Size }) => ReactNode
   onHover: (id: number | null) => void
   onSelect: (id: number | null) => void
   onCycle: (direction: 1 | -1) => void
+  /** Receives the canvas controller once it exists, so callers can capture the preview. */
+  stageRef?: MutableRefObject<StageHandle | null>
   /** Replaceable so tests can run without WebGL. */
   createStage?: CreateStage
 }
@@ -41,10 +52,12 @@ export function CanvasStage({
   hoveredId,
   selectedId,
   previews,
+  showPreviewNote = true,
   overlay,
   onHover,
   onSelect,
   onCycle,
+  stageRef,
   createStage = createPixiStage,
 }: CanvasStageProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -68,6 +81,7 @@ export function CanvasStage({
         if (cancelled) handle.destroy()
         else {
           created = handle
+          if (stageRef) stageRef.current = handle
           setStage(handle)
         }
       })
@@ -75,9 +89,10 @@ export function CanvasStage({
     return () => {
       cancelled = true
       created?.destroy()
+      if (stageRef) stageRef.current = null
       setStage(null)
     }
-  }, [createStage, handlers])
+  }, [createStage, handlers, stageRef])
 
   useEffect(() => {
     if (!stage) return
@@ -152,7 +167,7 @@ export function CanvasStage({
           )
         })}
       {view && imageSize && overlay?.({ view, imageSize })}
-      {previews.length > 0 && (
+      {showPreviewNote && previews.length > 0 && (
         <p className={styles.approximate} role="note">
           Preview is approximate. The final image is generated when you apply.
         </p>

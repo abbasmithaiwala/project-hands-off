@@ -9,12 +9,14 @@ use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 
-use crate::routes::{health, images, jobs, objects, settings};
+use crate::routes::{edits, health, images, jobs, objects, settings};
 use crate::state::AppState;
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 /// Headroom for multipart framing on top of the configured file size limit.
 const MULTIPART_OVERHEAD_BYTES: usize = 64 * 1024;
+/// Edits carry a base64 preview image, so their JSON body can be large.
+const EDIT_BODY_LIMIT: usize = 16 * 1024 * 1024;
 
 /// Build the application router with all middleware.
 pub fn router(state: AppState) -> Router {
@@ -44,6 +46,12 @@ pub fn router(state: AppState) -> Router {
             "/images/{id}/objects/{object_id}/widget",
             post(objects::widget),
         )
+        .route(
+            "/images/{id}/edits",
+            post(edits::apply_edits).layer(DefaultBodyLimit::max(EDIT_BODY_LIMIT)),
+        )
+        .route("/jobs/{id}/result", get(edits::get_result))
+        .route("/jobs/{id}/accept", post(edits::accept))
         .route("/settings", get(settings::get_settings))
         .route(
             "/settings/openrouter-key",

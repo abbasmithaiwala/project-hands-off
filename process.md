@@ -153,17 +153,17 @@ Exit: dragging any widget is smooth and the emitted edit payload matches the con
 
 Goal: apply one or many edits and get a photoreal result.
 
-- [ ] `ImageGenerator` trait with the OpenRouter implementation (image output modality), plus a fake generator for tests.
-- [ ] Summariser: deltas to change summary and generation prompt (validated output); template fallback if the model fails.
-- [ ] `POST /api/v1/images/{id}/edits` batching multiple edits into one generation request; builds the input set (original, mask overlay, warped preview, instruction).
-- [ ] Post-processing: mask-feathered composite into the original, size and colour matching, preserve full-resolution original; store the result as a new version.
-- [ ] SSE job events: `analysing`, `planning`, `generating`, `compositing`, `done`, with the reasoning log for the output panel; cancellation propagates to the in-flight request.
-- [ ] Frontend: progress UI, result reveal with before/after comparison, Accept, Cancel and Retry (optionally with another model).
-- [ ] Cost and latency shown per edit in the output panel.
+- [x] `ImageGenerator` trait with the OpenRouter implementation (image output modality), plus a fake generator for tests.
+- [x] Summariser: deltas to change summary and generation prompt (validated output); template fallback if the model fails.
+- [x] `POST /api/v1/images/{id}/edits` batching multiple edits into one generation request; builds the input set (original, warped preview, instruction; a mask overlay was not needed, see ADR 0006).
+- [x] Post-processing: mask-feathered composite into the original, size and colour matching, preserve full-resolution original; store the result as a new version.
+- [x] SSE job events: `analysing`, `planning`, `generating`, `compositing`, `done`, with the reasoning log for the output panel; cancellation propagates to the in-flight request.
+- [x] Frontend: progress UI, result reveal with before/after comparison, Accept, Cancel and Retry (optionally with another model).
+- [x] Cost and latency shown per edit in the output panel.
 
 Tests: composite correctness (untouched pixels identical), batch request construction (snapshot), job cancellation, error paths (provider failure, content moderation refusal, timeout) with clear user messages, Playwright full-flow test against the fake generator.
 
-Exit: the video's demo scenarios (bottle shape, couch length, multi-edit) work end to end with a real model.
+Exit: the video's demo scenarios (bottle shape, couch length, multi-edit) work end to end with a real model. **Partly met:** the couch scenario ran end to end with a real model (25 s, $0.14), but in that run the model did not follow the edit, and the account ran out of credits before it could be re-tested; the bottle and multi-edit scenarios were not run live.
 
 ---
 
@@ -244,3 +244,4 @@ Review these at the end of every phase.
 - 2026-11-14: Phase 4 done. `llm` crate (OpenRouter client with retry, fallback and cost capture; mock and demo providers; strict JSON schemas), versioned prompts, suggester and widget planner with validation, one repair retry and deterministic defaults, settings API (write-only key, model choice), `HANDS_OFF_DEMO_AI` mode. Benchmarked six models including `typesafe/jev-router` (ADR 0005). Fixed a real schema bug and a real placement-quality problem found by live testing. Note: `jev` turned out to be TypeSafe's Jev Router model on OpenRouter, not the typed-decisions API assumed earlier; it is supported as an optional model choice and the Decisions API phase below needs revisiting.
 - 2026-11-14: Phase 5 done. Design tokens and primitives, landing (drop, paste, pick), lazy-loaded editor with a PixiJS canvas (pan, zoom, hover, select, keyboard), property menu fed by the AI suggestions, planned widgets drawn on the canvas, activity panel, inline API-key dialog, settings dialog, theme store. 115 unit and component tests, axe clean on four views, 10 Playwright tests, 4 visual baselines. Real-browser review found and fixed: stale hit-test polygons when the image loaded after the objects, theme not applied on the landing page after reload, duplicate accessible name on the file input. Not done: Lighthouse score (no Lighthouse run yet); visual baselines are macOS-only.
 - 2026-11-14: Phase 6 done. Slider, control-point and multi-handle widgets (DOM handles over the canvas: draggable, keyboard-operable, labelled), a typed widget registry, constraints and snapping, per-object-and-property pending edits with a reset list, and a live mask-cut mesh preview using exact stretch (slider) and affine Moving Least Squares (points) with a smooth background patch. 210 unit and component tests, 19 Playwright tests, 6 visual baselines, axe clean including the editing state. Measured deformation at 0.15 ms per frame. A real-browser look found two layout problems fixed before finishing: controls hidden under the floating menu (the image now fits clear of the panels) and the selection outline not following the warp. Apply is intentionally disabled until Phase 7. Frame rate under real GPU rendering was not measured (the headless browser uses software rendering).
+- 2026-11-14: Phase 7 done, with one open question. `ImageGenerator` (OpenRouter, mock, demo), a summariser with template fallback, `POST /images/{id}/edits` with up-front validation, feathered compositing with colour matching that leaves pixels outside the regions byte-identical, result artifacts with accept, cancellation that abandons the in-flight model request, and `refused` as its own error. Frontend: Apply captures the on-screen preview and affected regions, progress pill with cancel, before/after review, Accept, Retry, Faster draft, Discard. Added the slider axis to the edit contract so the instruction can say which end stays fixed, and `ApiJson`/`ApiPath` extractors so malformed bodies and ids return the standard JSON error. 245 Rust tests, 258 web tests, 26 Playwright tests, 8 visual baselines. **Open:** a live run showed the model not following the edit; the OpenRouter account then ran out of credits, so the reliability of the new prompt is unmeasured (ADR 0006).

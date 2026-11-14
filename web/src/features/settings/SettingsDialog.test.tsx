@@ -10,6 +10,7 @@ const models = {
   ui_planner: 'google/gemini-3.1-flash-lite',
   summariser: 'google/gemini-3.1-flash-lite',
   generator: 'google/gemini-3-pro-image',
+  draft_generator: 'google/gemini-3.1-flash-image',
   fallback: 'anthropic/claude-haiku-5.5',
 }
 

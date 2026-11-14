@@ -1,0 +1,6 @@
+---
+source: crates/api/tests/edits.rs
+expression: request.user_text
+---
+Edits:
+0. couch: Length of the couch: scaled to 60% of its original size (100% is unchanged)

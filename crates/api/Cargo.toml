@@ -23,6 +23,7 @@ workspace = true
 anyhow = "1.0.104"
 async-trait.workspace = true
 axum = { workspace = true, features = ["multipart", "macros"] }
+base64.workspace = true
 chrono.workspace = true
 dotenvy = "0.15.7"
 futures.workspace = true
@@ -51,4 +52,5 @@ uuid.workspace = true
 futures.workspace = true
 http-body-util = "0.1.5"
 image = { workspace = true, features = ["png", "jpeg"] }
+insta = "1.49.0"
 tempfile.workspace = true

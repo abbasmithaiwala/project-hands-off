@@ -1,23 +1,20 @@
 //! Image upload and retrieval.
 
 use axum::Json;
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use chrono::Utc;
 use hands_off_core::model::{DetectedObject, ImageRecord};
 use hands_off_core::storage::BlobKey;
-use hands_off_core::{ContentHash, Error, ImageId, JobId, ObjectId};
+use hands_off_core::{Error, ImageId, JobId, ObjectId};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
-use tokio::task::spawn_blocking;
 use utoipa::ToSchema;
 
 use crate::analysis;
-use crate::error::{ApiError, ErrorBody};
+use crate::error::{ApiError, ApiPath, ErrorBody};
+use crate::ingest::ingest;
 use crate::state::AppState;
 
-const THUMBNAIL_MAX_SIDE: u32 = 512;
 const CACHE_FOREVER: &str = "private, max-age=31536000, immutable";
 
 /// Multipart form accepted by the upload endpoint.
@@ -35,10 +32,6 @@ async fn read_file_field(multipart: &mut Multipart) -> Result<Vec<u8>, ApiError>
         }
     }
     Err(Error::Validation("multipart field `file` is required".into()).into())
-}
-
-fn sha256_hex(bytes: &[u8]) -> Result<ContentHash, Error> {
-    ContentHash::new(hex::encode(Sha256::digest(bytes)))
 }
 
 /// Upload an image. Re-uploading identical bytes returns the existing record.
@@ -60,53 +53,13 @@ pub async fn upload(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImageRecord>), ApiError> {
     let bytes = read_file_field(&mut multipart).await?;
-    let limits = state.config.limits;
-
-    let (info, hash, bytes) = spawn_blocking(move || {
-        let info = hands_off_imaging::inspect(&bytes, &limits)?;
-        let hash = sha256_hex(&bytes)?;
-        Ok::<_, Error>((info, hash, bytes))
-    })
-    .await
-    .map_err(Error::internal)??;
-
-    if let Some(existing) = state.store.image_by_hash(&hash).await? {
-        return Ok((StatusCode::OK, Json(existing)));
-    }
-
-    let record = ImageRecord {
-        id: ImageId::new(),
-        hash,
-        format: info.format,
-        width: info.width,
-        height: info.height,
-        size_bytes: bytes.len() as u64,
-        created_at: Utc::now(),
+    let (record, created) = ingest(&state, bytes).await?;
+    let status = if created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
     };
-
-    let (original, thumbnail) = spawn_blocking(move || {
-        let thumbnail = hands_off_imaging::thumbnail(&bytes, THUMBNAIL_MAX_SIDE)?;
-        Ok::<_, Error>((bytes, thumbnail))
-    })
-    .await
-    .map_err(Error::internal)??;
-
-    state
-        .blobs
-        .put(&BlobKey::original(record.id), original)
-        .await?;
-    state
-        .blobs
-        .put(&BlobKey::thumbnail(record.id), thumbnail)
-        .await?;
-    if let Err(error) = state.store.insert_image(&record).await {
-        // A concurrent identical upload may have won the unique-hash race.
-        return match state.store.image_by_hash(&record.hash).await? {
-            Some(existing) => Ok((StatusCode::OK, Json(existing))),
-            None => Err(error.into()),
-        };
-    }
-    Ok((StatusCode::CREATED, Json(record)))
+    Ok((status, Json(record)))
 }
 
 async fn find(state: &AppState, id: ImageId) -> Result<ImageRecord, ApiError> {
@@ -130,7 +83,7 @@ async fn find(state: &AppState, id: ImageId) -> Result<ImageRecord, ApiError> {
 )]
 pub async fn get_image(
     State(state): State<AppState>,
-    Path(id): Path<ImageId>,
+    ApiPath(id): ApiPath<ImageId>,
 ) -> Result<Json<ImageRecord>, ApiError> {
     Ok(Json(find(&state, id).await?))
 }
@@ -148,7 +101,7 @@ pub async fn get_image(
 )]
 pub async fn get_original(
     State(state): State<AppState>,
-    Path(id): Path<ImageId>,
+    ApiPath(id): ApiPath<ImageId>,
 ) -> Result<Response, ApiError> {
     let record = find(&state, id).await?;
     let bytes = state.blobs.get(&BlobKey::original(id)).await?;
@@ -175,7 +128,7 @@ pub async fn get_original(
 )]
 pub async fn get_thumbnail(
     State(state): State<AppState>,
-    Path(id): Path<ImageId>,
+    ApiPath(id): ApiPath<ImageId>,
 ) -> Result<Response, ApiError> {
     find(&state, id).await?;
     let bytes = state.blobs.get(&BlobKey::thumbnail(id)).await?;
@@ -212,7 +165,7 @@ pub struct JobCreated {
 )]
 pub async fn analyze(
     State(state): State<AppState>,
-    Path(id): Path<ImageId>,
+    ApiPath(id): ApiPath<ImageId>,
 ) -> Result<(StatusCode, Json<JobCreated>), ApiError> {
     find(&state, id).await?;
     let worker = state.clone();
@@ -238,7 +191,7 @@ pub async fn analyze(
 )]
 pub async fn list_objects(
     State(state): State<AppState>,
-    Path(id): Path<ImageId>,
+    ApiPath(id): ApiPath<ImageId>,
 ) -> Result<Json<Vec<DetectedObject>>, ApiError> {
     find(&state, id).await?;
     let objects = analysis::cached_objects(&state, id)
@@ -263,7 +216,7 @@ pub async fn list_objects(
 )]
 pub async fn get_mask(
     State(state): State<AppState>,
-    Path((id, object_id)): Path<(ImageId, u32)>,
+    ApiPath((id, object_id)): ApiPath<(ImageId, u32)>,
 ) -> Result<Response, ApiError> {
     find(&state, id).await?;
     let objects = analysis::cached_objects(&state, id)

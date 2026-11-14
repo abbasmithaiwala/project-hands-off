@@ -30,6 +30,7 @@ CI runs the same command and fails if the committed files differ.
 | `timeout` | 504 | Operation exceeded its time budget |
 | `cancelled` | 409 | Operation was cancelled |
 | `unavailable` | 503 | A required model file or API key is missing; the message says how to provide it |
+| `refused` | 422 | The image model declined the edit (for example on content-policy grounds) |
 | `internal` | 500 | Unexpected failure; details are logged, never returned |
 
 ## Images
@@ -54,6 +55,18 @@ Both routes call a model the first time and are cached afterwards. See [models.m
 | `POST /images/{id}/objects/{object_id}/widget` | Body `{ "property": "<key>" }`. The control's geometry in image coordinates, validated and snapped onto the object. |
 
 If no API key is configured they return `503` with code `unavailable` and a message asking for one.
+
+## Applying edits
+
+| Route | Purpose |
+|---|---|
+| `POST /images/{id}/edits` | Body `EditRequest`: `edits`, optional `regions` (boxes that may change), `preview_png` (base64 PNG of the warped preview) and `model`. Validates immediately (`400`/`404`/`413`), then starts a job (`202`, `job_id`). |
+| `GET /jobs/{id}/result` | The edited image (PNG, original resolution) once the job has completed. `404` otherwise. |
+| `POST /jobs/{id}/accept` | Store the result as a new image (`201`, or `200` if identical bytes already exist). |
+
+The job's events run through the stages `analysing`, `planning`, `generating`, `compositing`, `done`, with `log` events for the instruction written for the model, which model answered, and its time and cost. It completes with an `EditResult` (summary, one change-log line per edit, instruction, model, cost, generation time). Cancel with `DELETE /jobs/{id}`; the in-flight model request is abandoned immediately. See [ADR 0006](adr/0006-apply-pipeline.md).
+
+Slider edits carry the line the handle moved along (`axis`) so the change can be described in words. Only pixels inside the edited regions can differ from the original.
 
 ## Settings
 

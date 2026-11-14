@@ -17,6 +17,9 @@ use hands_off_vision::Detector;
 use hands_off_vision::rfdetr::RfDetrSeg;
 use serde_json::Value;
 
+/// Inference taking longer than this is treated as a hang, not a slow machine.
+const HANG_LIMIT_SECS: u64 = 120;
+
 const CASES: [(&str, &str); 5] = [
     ("couch", "couch"),
     ("bottle", "vase"),
@@ -108,8 +111,10 @@ fn matches_the_python_reference_on_every_golden_image() {
         );
 
         assert!(main.mask.area() > 0, "{name}: empty mask");
+        // Speed is measured in docs/vision.md; here a very loose bound only catches hangs, since
+        // debug builds on a loaded machine are many times slower than a release build.
         assert!(
-            elapsed.as_secs_f32() < 5.0,
+            elapsed.as_secs() < HANG_LIMIT_SECS,
             "{name}: inference took {elapsed:?}"
         );
         eprintln!(

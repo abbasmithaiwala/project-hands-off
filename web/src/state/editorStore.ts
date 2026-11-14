@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DetectedObject, Edit, ImageRecord, Widget } from '@/api/client'
+import type { DetectedObject, Edit, EditResult, ImageRecord, Widget } from '@/api/client'
 import { cycle } from '@/lib/geometry'
 
 export type AnalysisStatus = 'idle' | 'running' | 'done' | 'failed'
@@ -14,6 +14,12 @@ export interface PendingEdit {
   widget: Widget
   edit: Edit
 }
+
+/** Where an Apply is up to. */
+export type ApplyState =
+  | { status: 'idle' }
+  | { status: 'running'; jobId: string | null; stage: string; startedAt: number }
+  | { status: 'review'; jobId: string; result: EditResult }
 
 export function editKey(objectId: number, property: string): string {
   return `${objectId}:${property}`
@@ -32,6 +38,7 @@ interface EditorState {
   log: string[]
   outputOpen: boolean
   pendingEdits: PendingEdit[]
+  apply: ApplyState
 }
 
 interface EditorActions {
@@ -46,6 +53,11 @@ interface EditorActions {
   setPendingEdit: (pending: PendingEdit) => void
   resetEdit: (key: string) => void
   clearEdits: () => void
+  beginApply: () => void
+  setApplyJob: (jobId: string) => void
+  setApplyStage: (stage: string) => void
+  finishApply: (jobId: string, result: EditResult) => void
+  closeApply: () => void
   toggleOutput: () => void
   reset: () => void
 }
@@ -61,6 +73,7 @@ const initial: EditorState = {
   log: [],
   outputOpen: false,
   pendingEdits: [],
+  apply: { status: 'idle' },
 }
 
 export const useEditorStore = create<EditorState & EditorActions>()((set, get) => ({
@@ -103,6 +116,18 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   resetEdit: (key) =>
     set((state) => ({ pendingEdits: state.pendingEdits.filter((e) => e.key !== key) })),
   clearEdits: () => set({ pendingEdits: [] }),
+  beginApply: () =>
+    set({ apply: { status: 'running', jobId: null, stage: 'analysing', startedAt: Date.now() } }),
+  setApplyJob: (jobId) =>
+    set((state) =>
+      state.apply.status === 'running' ? { apply: { ...state.apply, jobId } } : state,
+    ),
+  setApplyStage: (stage) =>
+    set((state) =>
+      state.apply.status === 'running' ? { apply: { ...state.apply, stage } } : state,
+    ),
+  finishApply: (jobId, result) => set({ apply: { status: 'review', jobId, result } }),
+  closeApply: () => set({ apply: { status: 'idle' } }),
   toggleOutput: () => set((state) => ({ outputOpen: !state.outputOpen })),
   reset: () => set({ ...initial }),
 }))

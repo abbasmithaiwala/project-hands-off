@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use hands_off_core::NormalizedPoint;
-use hands_off_core::model::{Axis, Property, Widget, WidgetKind};
+use hands_off_core::model::{Axis, ChangeSummary, EditChange, Property, Widget, WidgetKind};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
@@ -21,6 +21,16 @@ pub const WIDGET_SCHEMA: &str = "widget_plan";
 pub const SUGGESTER_PROMPT_VERSION: &str = "v1";
 /// Bump when the planner prompt or schema changes, to invalidate cached results.
 pub const PLANNER_PROMPT_VERSION: &str = "v1";
+/// Schema identifier for edit summaries.
+pub const SUMMARY_SCHEMA: &str = "edit_summary";
+/// Bump when the summariser prompt or schema changes.
+pub const SUMMARISER_PROMPT_VERSION: &str = "v1";
+/// System prompt for the summariser.
+pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v1.md");
+const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v1.md");
+const GENERATOR_WITHOUT_PREVIEW: &str =
+    include_str!("../../../prompts/generator-without-preview.v1.md");
+
 /// System prompt for the suggester.
 pub const SUGGESTER_SYSTEM: &str = include_str!("../../../prompts/suggester.v1.md");
 /// System prompt for the widget planner.
@@ -195,6 +205,251 @@ fn check_distinct(points: &[PointDraft]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// An edit described for the summariser: who changed what, and how.
+#[derive(Debug, Clone, Copy)]
+pub struct EditLine<'a> {
+    /// Position in the request's edit list.
+    pub index: usize,
+    /// For example "couch".
+    pub object_label: &'a str,
+    /// For example "Couch length".
+    pub property_label: &'a str,
+    /// What the user changed.
+    pub change: &'a EditChange,
+}
+
+const MOVED_EPSILON: f32 = 1e-4;
+const MAX_LISTED_MOVES: usize = 4;
+const MAX_INSTRUCTION_CHARS: usize = 1500;
+const MAX_SUMMARY_CHARS: usize = 200;
+const MAX_CHANGE_CHARS: usize = 240;
+
+fn percent(value: f32) -> i32 {
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        (value * 100.0).round() as i32
+    }
+}
+
+/// A precise, model-readable description of one edit, with numbers.
+#[must_use]
+pub fn describe_edit(line: &EditLine<'_>) -> String {
+    let head = format!("{} of the {}", line.property_label, line.object_label);
+    match line.change {
+        EditChange::Slider { value, axis } => {
+            let along = axis.map_or_else(String::new, |a| {
+                format!(
+                    " along the line from ({}% across, {}% down) to ({}% across, {}% down), keeping the start of that line fixed",
+                    percent(a.start.x),
+                    percent(a.start.y),
+                    percent(a.end.x),
+                    percent(a.end.y)
+                )
+            });
+            format!(
+                "{head}: scaled to {}% of its original size{along} (100% is unchanged)",
+                percent(*value)
+            )
+        }
+        EditChange::ControlPoints { origin, target }
+        | EditChange::MultiHandle { origin, target } => {
+            let moves: Vec<String> = origin
+                .iter()
+                .zip(target)
+                .enumerate()
+                .filter(|(_, (a, b))| {
+                    (a.x - b.x).abs() > MOVED_EPSILON || (a.y - b.y).abs() > MOVED_EPSILON
+                })
+                .map(|(i, (a, b))| {
+                    format!(
+                        "point {} moved from ({}% across, {}% down) to ({}% across, {}% down)",
+                        i + 1,
+                        percent(a.x),
+                        percent(a.y),
+                        percent(b.x),
+                        percent(b.y)
+                    )
+                })
+                .collect();
+            let extra = moves.len().saturating_sub(MAX_LISTED_MOVES);
+            let mut listed = moves
+                .into_iter()
+                .take(MAX_LISTED_MOVES)
+                .collect::<Vec<_>>()
+                .join("; ");
+            if extra > 0 {
+                listed = format!("{listed}; and {extra} more");
+            }
+            format!("{head}: {listed}")
+        }
+    }
+}
+
+/// User message for the summariser.
+#[must_use]
+pub fn summariser_user_text(lines: &[EditLine<'_>]) -> String {
+    let list: Vec<String> = lines
+        .iter()
+        .map(|l| format!("{}. {}: {}", l.index, l.object_label, describe_edit(l)))
+        .collect();
+    format!("Edits:\n{}", list.join("\n"))
+}
+
+/// The summariser's answer, as the model writes it.
+#[derive(Deserialize, JsonSchema)]
+struct SummaryDraft {
+    /// One paragraph telling the image model what to change.
+    instruction: String,
+    /// At most 15 words for a history list.
+    summary: String,
+    /// One entry per numbered edit.
+    changes: Vec<ChangeDraft>,
+}
+
+/// One change-log line, as the model writes it.
+#[derive(Deserialize, JsonSchema)]
+struct ChangeDraft {
+    /// The number of the edit this describes.
+    edit_index: u32,
+    /// A short past-tense sentence.
+    text: String,
+}
+
+/// The JSON Schema the summariser must satisfy.
+#[must_use]
+pub fn summary_schema() -> Value {
+    strict_schema::<SummaryDraft>()
+}
+
+/// A validated summary of a batch of edits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditSummary {
+    /// What the image model is asked to do.
+    pub instruction: String,
+    /// One line for a history list.
+    pub summary: String,
+    /// One entry per edit.
+    pub changes: Vec<ChangeSummary>,
+}
+
+fn short_description(line: &EditLine<'_>) -> String {
+    match line.change {
+        EditChange::Slider { value, .. } => format!("{}%", percent(*value)),
+        EditChange::ControlPoints { origin, target }
+        | EditChange::MultiHandle { origin, target } => {
+            let moved = origin
+                .iter()
+                .zip(target)
+                .filter(|(a, b)| {
+                    (a.x - b.x).abs() > MOVED_EPSILON || (a.y - b.y).abs() > MOVED_EPSILON
+                })
+                .count();
+            if moved == 1 {
+                "1 point moved".to_owned()
+            } else {
+                format!("{moved} points moved")
+            }
+        }
+    }
+}
+
+fn template_change(line: &EditLine<'_>) -> ChangeSummary {
+    ChangeSummary {
+        edit_index: u32::try_from(line.index).unwrap_or(u32::MAX),
+        text: format!(
+            "Changed the {} of the {} ({})",
+            line.property_label.to_lowercase(),
+            line.object_label,
+            short_description(line)
+        ),
+    }
+}
+
+/// A summary built from templates, used when no model can write one.
+#[must_use]
+pub fn template_summary(lines: &[EditLine<'_>]) -> EditSummary {
+    let described: Vec<String> = lines.iter().map(describe_edit).collect();
+    let changes: Vec<ChangeSummary> = lines.iter().map(template_change).collect();
+    let summary = match lines {
+        [only] => format!(
+            "Changed the {} of the {}",
+            only.property_label.to_lowercase(),
+            only.object_label
+        ),
+        _ => format!("Made {} changes", lines.len()),
+    };
+    EditSummary {
+        instruction: format!("Make these changes: {}.", described.join("; ")),
+        summary,
+        changes,
+    }
+}
+
+/// Parse and validate a summary answer. Missing change-log lines are filled from templates;
+/// everything else must be sound or the answer is rejected.
+///
+/// # Errors
+/// A human-readable description of the problem, suitable for a repair request.
+pub fn parse_edit_summary(content: &str, lines: &[EditLine<'_>]) -> Result<EditSummary, String> {
+    let draft: SummaryDraft = serde_json::from_str(content)
+        .map_err(|e| format!("the JSON did not match the schema ({e})"))?;
+    let instruction = draft.instruction.trim().to_owned();
+    if instruction.chars().count() < 10 || instruction.chars().count() > MAX_INSTRUCTION_CHARS {
+        return Err(format!(
+            "`instruction` must be between 10 and {MAX_INSTRUCTION_CHARS} characters"
+        ));
+    }
+    let summary = draft.summary.trim().to_owned();
+    if summary.is_empty() || summary.chars().count() > MAX_SUMMARY_CHARS {
+        return Err(format!(
+            "`summary` must be between 1 and {MAX_SUMMARY_CHARS} characters"
+        ));
+    }
+
+    let mut changes: Vec<ChangeSummary> = Vec::new();
+    for change in draft.changes {
+        let known = lines
+            .iter()
+            .any(|l| u32::try_from(l.index) == Ok(change.edit_index));
+        let text = change.text.trim().to_owned();
+        let valid = known
+            && !text.is_empty()
+            && text.chars().count() <= MAX_CHANGE_CHARS
+            && !changes.iter().any(|c| c.edit_index == change.edit_index);
+        if valid {
+            changes.push(ChangeSummary {
+                edit_index: change.edit_index,
+                text,
+            });
+        }
+    }
+    for line in lines {
+        if !changes
+            .iter()
+            .any(|c| u32::try_from(line.index) == Ok(c.edit_index))
+        {
+            changes.push(template_change(line));
+        }
+    }
+    changes.sort_by_key(|c| c.edit_index);
+    Ok(EditSummary {
+        instruction,
+        summary,
+        changes,
+    })
+}
+
+/// The full text sent to the image model for `instruction`.
+#[must_use]
+pub fn generation_instruction(instruction: &str, with_preview: bool) -> String {
+    let template = if with_preview {
+        GENERATOR_WITH_PREVIEW
+    } else {
+        GENERATOR_WITHOUT_PREVIEW
+    };
+    template.trim().replace("{instruction}", instruction.trim())
 }
 
 /// Maps a point from crop coordinates into image coordinates, clamping to the image.
@@ -532,5 +787,220 @@ mod tests {
         assert!(
             SUGGESTER_SYSTEM.contains("control_points") && PLANNER_SYSTEM.contains("normalised")
         );
+    }
+
+    fn slider_line(change: &EditChange, index: usize) -> EditLine<'_> {
+        EditLine {
+            index,
+            object_label: "couch",
+            property_label: "Couch length",
+            change,
+        }
+    }
+
+    fn moved_points(count: usize, shifted: usize) -> EditChange {
+        let origin: Vec<NormalizedPoint> = (0..count)
+            .map(|i| {
+                NormalizedPoint::new(0.1 + 0.05 * f32::from(u8::try_from(i).unwrap()), 0.5).unwrap()
+            })
+            .collect();
+        let target = origin
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                if i < shifted {
+                    NormalizedPoint::new(p.x, 0.7).unwrap()
+                } else {
+                    *p
+                }
+            })
+            .collect();
+        EditChange::ControlPoints { origin, target }
+    }
+
+    #[test]
+    fn describes_slider_edits_with_a_percentage() {
+        let change = EditChange::Slider {
+            axis: None,
+            value: 0.604,
+        };
+        assert_eq!(
+            describe_edit(&slider_line(&change, 0)),
+            "Couch length of the couch: scaled to 60% of its original size (100% is unchanged)"
+        );
+    }
+
+    #[test]
+    fn describes_which_end_of_a_slider_line_stays_fixed() {
+        let axis = Axis {
+            start: NormalizedPoint::new(0.2, 0.7).unwrap(),
+            end: NormalizedPoint::new(0.7, 0.7).unwrap(),
+        };
+        let change = EditChange::Slider {
+            value: 0.55,
+            axis: Some(axis),
+        };
+        let text = describe_edit(&slider_line(&change, 0));
+        assert!(
+            text.contains("along the line from (20% across, 70% down) to (70% across, 70% down), keeping the start of that line fixed"),
+            "{text}"
+        );
+        assert!(text.ends_with("(100% is unchanged)"), "{text}");
+    }
+
+    #[test]
+    fn describes_moved_points_and_caps_the_list() {
+        let change = moved_points(8, 6);
+        let text = describe_edit(&slider_line(&change, 0));
+        assert!(
+            text.contains("point 1 moved from (10% across, 50% down) to (10% across, 70% down)"),
+            "{text}"
+        );
+        assert!(text.contains("point 4"), "{text}");
+        assert!(!text.contains("point 5"), "{text}");
+        assert!(text.ends_with("and 2 more"), "{text}");
+    }
+
+    #[test]
+    fn the_summariser_message_numbers_each_edit() {
+        let slider = EditChange::Slider {
+            axis: None,
+            value: 0.8,
+        };
+        let points = moved_points(3, 1);
+        let text = summariser_user_text(&[slider_line(&slider, 0), slider_line(&points, 1)]);
+        assert!(
+            text.starts_with("Edits:\n0. couch: Couch length of the couch: scaled to 80%"),
+            "{text}"
+        );
+        assert!(text.contains("\n1. couch:"), "{text}");
+    }
+
+    fn summary_json(instruction: &str, changes: &Value) -> String {
+        json!({ "instruction": instruction, "summary": "Shortened the couch", "changes": changes })
+            .to_string()
+    }
+
+    #[test]
+    fn accepts_a_valid_summary() {
+        let change = EditChange::Slider {
+            axis: None,
+            value: 0.6,
+        };
+        let lines = [slider_line(&change, 0)];
+        let answer = summary_json(
+            "Make the sofa about 40% shorter.",
+            &json!([{ "edit_index": 0, "text": "Shortened the couch to about 60% of its length" }]),
+        );
+        let parsed = parse_edit_summary(&answer, &lines).unwrap();
+        assert_eq!(parsed.instruction, "Make the sofa about 40% shorter.");
+        assert_eq!(parsed.summary, "Shortened the couch");
+        assert_eq!(
+            parsed.changes[0].text,
+            "Shortened the couch to about 60% of its length"
+        );
+    }
+
+    #[test]
+    fn fills_missing_drops_unknown_and_ignores_duplicate_change_lines() {
+        let a = EditChange::Slider {
+            axis: None,
+            value: 0.6,
+        };
+        let b = EditChange::Slider {
+            axis: None,
+            value: 0.9,
+        };
+        let lines = [slider_line(&a, 0), slider_line(&b, 1)];
+        let answer = summary_json(
+            "Shorten the sofa slightly more than before.",
+            &json!([
+                { "edit_index": 1, "text": "Trimmed it a little" },
+                { "edit_index": 1, "text": "Duplicate line" },
+                { "edit_index": 9, "text": "About something that does not exist" },
+            ]),
+        );
+        let parsed = parse_edit_summary(&answer, &lines).unwrap();
+        let indexes: Vec<u32> = parsed.changes.iter().map(|c| c.edit_index).collect();
+        assert_eq!(indexes, [0, 1]);
+        assert_eq!(parsed.changes[1].text, "Trimmed it a little");
+        assert!(
+            parsed.changes[0]
+                .text
+                .starts_with("Changed the couch length of the couch"),
+            "{parsed:?}"
+        );
+    }
+
+    #[test]
+    fn rejects_unusable_summaries() {
+        let change = EditChange::Slider {
+            axis: None,
+            value: 0.6,
+        };
+        let lines = [slider_line(&change, 0)];
+        assert!(parse_edit_summary("nope", &lines).is_err());
+        assert!(
+            parse_edit_summary(&summary_json("short", &json!([])), &lines)
+                .unwrap_err()
+                .contains("instruction")
+        );
+        assert!(
+            parse_edit_summary(&summary_json(&"x".repeat(1600), &json!([])), &lines).is_err(),
+            "overlong instructions are rejected"
+        );
+        let blank_summary = json!({ "instruction": "Make the sofa shorter please.", "summary": " ", "changes": [] }).to_string();
+        assert!(
+            parse_edit_summary(&blank_summary, &lines)
+                .unwrap_err()
+                .contains("summary")
+        );
+    }
+
+    #[test]
+    fn template_summaries_cover_every_edit() {
+        let a = EditChange::Slider {
+            axis: None,
+            value: 0.6,
+        };
+        let b = moved_points(3, 2);
+        let single = template_summary(&[slider_line(&a, 0)]);
+        assert_eq!(single.summary, "Changed the couch length of the couch");
+        assert!(single.instruction.contains("scaled to 60%"));
+
+        let both = template_summary(&[slider_line(&a, 0), slider_line(&b, 1)]);
+        assert_eq!(both.summary, "Made 2 changes");
+        assert_eq!(both.changes.len(), 2);
+        assert!(
+            both.changes[1].text.ends_with("(2 points moved)"),
+            "{:?}",
+            both.changes
+        );
+    }
+
+    #[test]
+    fn the_generation_text_depends_on_whether_there_is_a_preview() {
+        let with = generation_instruction("Shorten the sofa.", true);
+        assert!(with.contains("Shorten the sofa.") && with.contains("second image"));
+        assert!(with.contains("identical to the original"));
+        let without = generation_instruction("Shorten the sofa.", false);
+        assert!(without.contains("Shorten the sofa.") && !without.contains("second image"));
+        assert!(!with.contains("{instruction}") && !without.contains("{instruction}"));
+    }
+
+    #[test]
+    fn the_summary_schema_is_strict() {
+        let schema = summary_schema();
+        assert_eq!(schema["additionalProperties"], false);
+        assert!(!schema.to_string().contains("$ref"));
+        for field in ["instruction", "summary", "changes"] {
+            assert!(
+                schema["required"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!(field)),
+                "{field}"
+            );
+        }
     }
 }

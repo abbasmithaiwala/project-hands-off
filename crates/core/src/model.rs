@@ -141,6 +141,8 @@ pub struct ModelSettings {
     pub summariser: String,
     /// Generates the edited image.
     pub generator: String,
+    /// A faster, cheaper generator offered as a draft option when retrying.
+    pub draft_generator: String,
     /// Tried when the stage's own model fails or is unavailable.
     pub fallback: String,
 }
@@ -152,9 +154,20 @@ impl Default for ModelSettings {
             ui_planner: "google/gemini-3.1-flash-lite".into(),
             summariser: "google/gemini-3.1-flash-lite".into(),
             generator: "google/gemini-3-pro-image".into(),
+            draft_generator: "google/gemini-3.1-flash-image".into(),
             fallback: "anthropic/claude-haiku-5.5".into(),
         }
     }
+}
+
+/// Whether `value` looks like an OpenRouter model id: short, and made of safe characters.
+#[must_use]
+pub fn is_valid_model_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 100
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_.:/~".contains(c))
 }
 
 impl ModelSettings {
@@ -168,13 +181,10 @@ impl ModelSettings {
             ("ui_planner", &self.ui_planner),
             ("summariser", &self.summariser),
             ("generator", &self.generator),
+            ("draft_generator", &self.draft_generator),
             ("fallback", &self.fallback),
         ] {
-            let valid = !value.is_empty()
-                && value.len() <= 100
-                && value
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "-_.:/~".contains(c));
+            let valid = is_valid_model_id(value);
             if !valid {
                 return Err(crate::Error::Validation(format!(
                     "{field}: not a valid model id"
@@ -183,6 +193,49 @@ impl ModelSettings {
         }
         Ok(())
     }
+}
+
+/// A request to apply a batch of edits to an image.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct EditRequest {
+    /// The edits, applied together in one generation.
+    pub edits: Vec<Edit>,
+    /// For each affected area of the image, the box it covers before and after the edits.
+    /// Only pixels inside these boxes may change. When empty, the edited objects' boxes are used.
+    #[serde(default)]
+    pub regions: Vec<BBox>,
+    /// Base64 PNG of the rough warped preview, used as a geometry reference for the model.
+    #[serde(default)]
+    pub preview_png: Option<String>,
+    /// Image model to use instead of the configured generator.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+/// One line of the change log for an applied edit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct ChangeSummary {
+    /// Index into the request's `edits`.
+    pub edit_index: u32,
+    /// Plain-language description, for example "Shortened the couch to about 60% of its length".
+    pub text: String,
+}
+
+/// The outcome of a successful edit job.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct EditResult {
+    /// One-line summary of everything that changed.
+    pub summary: String,
+    /// One entry per edit.
+    pub changes: Vec<ChangeSummary>,
+    /// The instruction that was sent to the image model.
+    pub instruction: String,
+    /// The image model that produced the result.
+    pub model: String,
+    /// Cost of the image generation in US dollars, when reported.
+    pub cost_usd: Option<f64>,
+    /// How long the image generation took.
+    pub generation_ms: u64,
 }
 
 /// A line segment along which a slider moves.
@@ -239,8 +292,12 @@ impl Widget {
 pub enum EditChange {
     /// A slider moved to `value`.
     Slider {
-        /// New value.
+        /// New value, as a multiplier (`1.0` is unchanged).
         value: f32,
+        /// The line the handle moved along. Its start stays fixed, which lets the edit be
+        /// described in words ("keeping the left end in place").
+        #[serde(default)]
+        axis: Option<Axis>,
     },
     /// Points moved from `origin` to `target`.
     ControlPoints {
@@ -314,7 +371,10 @@ mod tests {
         let edit = Edit {
             object_id: ObjectId(3),
             property: "length".into(),
-            change: EditChange::Slider { value: 0.55 },
+            change: EditChange::Slider {
+                value: 0.55,
+                axis: None,
+            },
         };
         let back: Edit = serde_json::from_str(&serde_json::to_string(&edit).unwrap()).unwrap();
         assert_eq!(back, edit);
@@ -339,6 +399,14 @@ mod tests {
             ..ModelSettings::default()
         };
         assert!(jev.validate().is_ok());
+    }
+
+    #[test]
+    fn edit_requests_default_their_optional_fields() {
+        let request: EditRequest = serde_json::from_str(r#"{"edits":[]}"#).unwrap();
+        assert!(
+            request.regions.is_empty() && request.preview_png.is_none() && request.model.is_none()
+        );
     }
 
     #[test]

@@ -65,6 +65,18 @@ impl BlobKey {
         Self::new(format!("images/{id}/objects/{}/{name}.json", object.0))
     }
 
+    /// Key for the image produced by an edit job.
+    #[must_use]
+    pub fn job_result(job: JobId) -> Self {
+        Self(format!("jobs/{job}/result.png"))
+    }
+
+    /// Key for the metadata describing an edit job's result.
+    #[must_use]
+    pub fn job_meta(job: JobId) -> Self {
+        Self(format!("jobs/{job}/result.json"))
+    }
+
     /// The key as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -165,5 +177,8 @@ mod tests {
         assert!(BlobKey::new(BlobKey::thumbnail(id).as_str()).is_ok());
         assert!(BlobKey::new(BlobKey::analysis(id).as_str()).is_ok());
         assert!(BlobKey::new(BlobKey::mask(id, ObjectId(3)).as_str()).is_ok());
+        let job = JobId::new();
+        assert!(BlobKey::new(BlobKey::job_result(job).as_str()).is_ok());
+        assert!(BlobKey::new(BlobKey::job_meta(job).as_str()).is_ok());
     }
 }

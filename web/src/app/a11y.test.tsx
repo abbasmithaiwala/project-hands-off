@@ -1,7 +1,7 @@
 import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { axe } from 'vitest-axe'
-import { describe, expect, it } from 'vitest'
+import { configureAxe } from 'vitest-axe'
+import { describe, expect, it, beforeAll } from 'vitest'
 import { App } from '@/app/App'
 import { useEditorStore } from '@/state/editorStore'
 import {
@@ -11,6 +11,9 @@ import {
   installFakeEventSource,
   renderWithProviders,
 } from '@/test/utils'
+
+// jsdom cannot compute colours, so contrast is checked in the real browser instead.
+const axe = configureAxe({ rules: { 'color-contrast': { enabled: false } } })
 
 const routes = {
   'POST /api/v1/images/img-1/analyze': () => ({ job_id: 'job-1' }),
@@ -24,10 +27,14 @@ const routes = {
       ui_planner: 'a/b',
       summariser: 'a/b',
       generator: 'a/b',
+      draft_generator: 'a/b',
       fallback: 'a/b',
     },
   }),
 }
+
+// The editor is loaded on demand; load it once up front so tests are not at the mercy of module-loading speed.
+beforeAll(() => import('@/features/editor/EditorScreen'), 60_000)
 
 describe('accessibility (axe)', () => {
   it('landing screen has no violations', async () => {
@@ -74,6 +81,38 @@ describe('accessibility (axe)', () => {
     handle.focus()
     await userEvent.keyboard('{ArrowLeft}')
     await userEvent.click(await screen.findByRole('button', { name: '1 change' }))
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('the review state (comparison slider and actions) has no violations', async () => {
+    installFakeEventSource()
+    const stage = fakeStage()
+    const { container } = renderWithProviders(<App createStage={stage.createStage} />, routes)
+    act(() => useEditorStore.getState().openImage(image))
+    await screen.findByTestId('canvas-stage')
+    act(() => {
+      stage.callbacks().onViewChange({ scale: 0.5, x: 0, y: 0 })
+      useEditorStore.getState().finishApply('job-9', {
+        summary: 'Shortened the couch',
+        changes: [{ edit_index: 0, text: 'Shortened the couch to about 60% of its length' }],
+        instruction: 'Make the couch shorter.',
+        model: 'google/gemini-3-pro-image',
+        cost_usd: 0.14,
+        generation_ms: 19200,
+      })
+    })
+    await screen.findByRole('slider', { name: 'Compare before and after' })
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('the progress state has no violations', async () => {
+    installFakeEventSource()
+    const stage = fakeStage()
+    const { container } = renderWithProviders(<App createStage={stage.createStage} />, routes)
+    act(() => useEditorStore.getState().openImage(image))
+    await screen.findByTestId('canvas-stage')
+    act(() => useEditorStore.getState().beginApply())
+    await screen.findByRole('status', { name: 'Applying your edits' })
     expect(await axe(container)).toHaveNoViolations()
   })
 

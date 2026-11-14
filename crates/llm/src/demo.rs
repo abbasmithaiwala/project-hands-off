@@ -8,7 +8,9 @@ use hands_off_core::{Error, Result};
 use serde_json::{Value, json};
 
 use crate::contracts::{SUGGESTIONS_SCHEMA, WIDGET_SCHEMA};
-use crate::provider::{JsonRequest, JsonResponse, LlmProvider, Usage};
+use crate::provider::{
+    ImageGenerator, ImageRequest, ImageResponse, JsonRequest, JsonResponse, LlmProvider, Usage,
+};
 
 /// Answers suggestion and widget requests from simple rules.
 #[derive(Debug, Default, Clone, Copy)]
@@ -114,6 +116,25 @@ impl LlmProvider for DemoProvider {
     }
 }
 
+/// Stands in for the image model in demo mode by returning the preview (or the original) as
+/// the result, so the whole flow can be tried without an account.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DemoGenerator;
+
+#[async_trait]
+impl ImageGenerator for DemoGenerator {
+    async fn generate(&self, request: ImageRequest) -> Result<ImageResponse> {
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        let source = request.preview.unwrap_or(request.original);
+        Ok(ImageResponse {
+            bytes: source.bytes,
+            model: "demo".into(),
+            usage: Usage::default(),
+            latency: Duration::from_millis(900),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use hands_off_core::NormalizedPoint;
@@ -187,6 +208,34 @@ mod tests {
                 .complete_json(request("something_else", String::new()))
                 .await
                 .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn the_demo_generator_returns_the_preview_when_there_is_one() {
+        let request = |preview: Option<Vec<u8>>| ImageRequest {
+            models: Vec::new(),
+            instruction: String::new(),
+            original: crate::provider::ImageInput {
+                mime: "image/png",
+                bytes: vec![1],
+            },
+            preview: preview.map(|bytes| crate::provider::ImageInput {
+                mime: "image/png",
+                bytes,
+            }),
+        };
+        assert_eq!(
+            DemoGenerator
+                .generate(request(Some(vec![9])))
+                .await
+                .unwrap()
+                .bytes,
+            [9]
+        );
+        assert_eq!(
+            DemoGenerator.generate(request(None)).await.unwrap().bytes,
+            [1]
         );
     }
 }

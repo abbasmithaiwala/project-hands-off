@@ -57,9 +57,16 @@ impl LiveJob {
 #[derive(Clone)]
 pub struct JobContext {
     job: Arc<LiveJob>,
+    id: JobId,
 }
 
 impl JobContext {
+    /// The id of the job this context belongs to.
+    #[must_use]
+    pub fn id(&self) -> JobId {
+        self.id
+    }
+
     /// Announce that a pipeline stage started or advanced.
     pub fn progress(&self, stage: &str, message: &str) {
         self.job.emit(JobEvent::Progress {
@@ -156,6 +163,7 @@ impl JobManager {
         tokio::spawn(async move {
             let context = JobContext {
                 job: Arc::clone(&job),
+                id,
             };
             let outcome = tokio::select! {
                 biased;

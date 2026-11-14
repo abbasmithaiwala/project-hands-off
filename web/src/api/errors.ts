@@ -46,9 +46,14 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   return result.data
 }
 
+/** True when a failure message says the OpenRouter key is missing or rejected. */
+export function mentionsApiKey(message: string): boolean {
+  return /api key/i.test(message)
+}
+
 /** True when the failure means the OpenRouter key is missing or rejected. */
 export function isKeyProblem(error: unknown): boolean {
-  return error instanceof ApiError && error.code === 'unavailable' && /api key/i.test(error.message)
+  return error instanceof ApiError && error.code === 'unavailable' && mentionsApiKey(error.message)
 }
 
 /** A short message that is safe to show to a user. */

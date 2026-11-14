@@ -18,12 +18,14 @@ const MODEL_FIELDS: Array<{ key: keyof ModelSettings; label: string }> = [
   { key: 'ui_planner', label: 'Places the controls' },
   { key: 'summariser', label: 'Summarises edits' },
   { key: 'generator', label: 'Generates the result' },
+  { key: 'draft_generator', label: 'Faster draft when retrying' },
   { key: 'fallback', label: 'Fallback when a model fails' },
 ]
 
 const SUGGESTIONS = [
   'google/gemini-3.1-flash-lite',
   'google/gemini-3-pro-image',
+  'google/gemini-3.1-flash-image',
   'anthropic/claude-haiku-5.5',
   'typesafe/jev-router',
 ]

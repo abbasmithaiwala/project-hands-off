@@ -85,6 +85,9 @@ export function fakeStage() {
     setObjects: vi.fn(),
     setHighlight: vi.fn(),
     setPreview: vi.fn(),
+    capturePreview: vi.fn(
+      async () => new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
+    ),
     fit: vi.fn(),
     zoomBy: vi.fn(),
     destroy: vi.fn(),

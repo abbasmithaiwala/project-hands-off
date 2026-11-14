@@ -1,21 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EditChange, ImageRecord } from '@/api/client'
 import { isKeyProblem } from '@/api/errors'
-import { useProperties, useWidget } from '@/api/hooks'
+import { useProperties, useSettings, useWidget } from '@/api/hooks'
 import { toast } from '@/design/toastStore'
 import { describeChange, isUnchanged } from '@/lib/widgetMath'
 import { editKey, useEditorStore } from '@/state/editorStore'
 import { ApiKeyDialog } from '../settings/ApiKeyDialog'
 import { SettingsDialog } from '../settings/SettingsDialog'
 import { ActionBar } from './ActionBar'
+import { ApplyProgress } from './ApplyProgress'
 import { CanvasStage } from './canvas/CanvasStage'
-import type { CreateStage } from './canvas/stage'
+import type { CreateStage, StageHandle } from './canvas/stage'
+import { CompareView } from './CompareView'
 import styles from './EditorScreen.module.css'
 import { OutputPanel } from './OutputPanel'
 import { buildPreviews, reachFor } from './previews'
 import { PropertyMenu } from './PropertyMenu'
+import { ReviewBar } from './ReviewBar'
 import { TopBar } from './TopBar'
 import { useAnalysis } from './useAnalysis'
+import { useApplyEdits } from './useApplyEdits'
 import { WidgetLayer } from './widgets/WidgetLayer'
 
 interface EditorScreenProps {
@@ -23,8 +27,6 @@ interface EditorScreenProps {
   /** Replaceable so tests can run without WebGL. */
   createStage?: CreateStage
 }
-
-const APPLY_UNAVAILABLE = 'Generating the edited image is not connected yet.'
 
 export function EditorScreen({ image, createStage }: EditorScreenProps) {
   useAnalysis(image.id)
@@ -38,6 +40,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
   const log = useEditorStore((s) => s.log)
   const outputOpen = useEditorStore((s) => s.outputOpen)
   const pendingEdits = useEditorStore((s) => s.pendingEdits)
+  const apply = useEditorStore((s) => s.apply)
   const { hover, select, selectNext, setActiveProperty, toggleOutput, reset } =
     useEditorStore.getState()
   const { setPendingEdit, resetEdit, clearEdits } = useEditorStore.getState()
@@ -46,6 +49,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
   const properties = useProperties(image.id, selected?.id ?? null)
   const widget = useWidget(image.id, selected?.id ?? null, activeProperty)
   const property = properties.data?.properties.find((p) => p.key === activeProperty) ?? null
+  const settings = useSettings()
 
   const [keyRequested, setKeyRequested] = useState(false)
   const [dismissedError, setDismissedError] = useState<unknown>(null)
@@ -57,6 +61,10 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
     setKeyRequested(open)
     if (!open) setDismissedError(keyError)
   }
+
+  const stageRef = useRef<StageHandle | null>(null)
+  const applying = useApplyEdits({ image, stageRef, onKeyProblem: () => setKeyRequested(true) })
+  const editing = apply.status === 'idle'
 
   useEffect(() => {
     if (analysisError) toast.error(analysisError)
@@ -115,8 +123,20 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
         hoveredId={hoveredId}
         selectedId={selectedId}
         previews={previews}
-        overlay={({ view, imageSize: size }) =>
-          selected && activeProperty && widget.data ? (
+        showPreviewNote={editing}
+        stageRef={stageRef}
+        overlay={({ view, imageSize: size }) => {
+          if (apply.status === 'review') {
+            return (
+              <CompareView
+                beforeUrl={`/api/v1/images/${image.id}/original`}
+                afterUrl={`/api/v1/jobs/${apply.jobId}/result`}
+                view={view}
+                imageSize={size}
+              />
+            )
+          }
+          return editing && selected && activeProperty && widget.data ? (
             <WidgetLayer
               key={activeKey}
               widget={widget.data}
@@ -129,7 +149,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
               onChange={handleChange}
             />
           ) : null
-        }
+        }}
         onHover={hover}
         onSelect={select}
         onCycle={selectNext}
@@ -146,7 +166,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
       />
 
       <div className={styles.floating}>
-        {selected && (
+        {editing && selected && (
           <PropertyMenu
             objectLabel={selected.label}
             properties={properties.data?.properties}
@@ -161,13 +181,31 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
             onRetry={() => void properties.refetch()}
           />
         )}
-        <ActionBar
-          items={items}
-          onReset={resetEdit}
-          onApply={() => undefined}
-          onCancel={clearEdits}
-          applyUnavailable={APPLY_UNAVAILABLE}
-        />
+        {editing && (
+          <ActionBar
+            items={items}
+            onReset={resetEdit}
+            onApply={() => void applying.run()}
+            onCancel={clearEdits}
+          />
+        )}
+        {apply.status === 'running' && (
+          <ApplyProgress
+            stage={apply.stage}
+            startedAt={apply.startedAt}
+            onCancel={() => void applying.cancel()}
+          />
+        )}
+        {apply.status === 'review' && (
+          <ReviewBar
+            result={apply.result}
+            draftModel={settings.data?.models.draft_generator}
+            onAccept={() => void applying.accept()}
+            onRetry={() => void applying.run()}
+            onDraft={() => void applying.run(settings.data?.models.draft_generator)}
+            onDiscard={applying.discard}
+          />
+        )}
       </div>
 
       {outputOpen && <OutputPanel lines={log} onClose={toggleOutput} />}

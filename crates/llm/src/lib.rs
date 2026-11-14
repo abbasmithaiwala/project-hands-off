@@ -9,5 +9,6 @@ pub mod provider;
 pub mod schema;
 
 pub use provider::{
-    ImageInput, JsonRequest, JsonResponse, KeyProvider, LlmProvider, Repair, Stage, Usage,
+    ImageGenerator, ImageInput, ImageRequest, ImageResponse, JsonRequest, JsonResponse,
+    KeyProvider, LlmProvider, Repair, Stage, Usage,
 };

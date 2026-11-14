@@ -1,4 +1,4 @@
-//! The `OpenRouter` chat-completions client.
+//! The `OpenRouter` chat-completions client, for structured answers and generated images.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,23 +10,50 @@ use hands_off_core::{Error, Result};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 
-use crate::provider::{JsonRequest, JsonResponse, KeyProvider, LlmProvider, Usage};
+use crate::provider::{
+    ImageGenerator, ImageInput, ImageRequest, ImageResponse, JsonRequest, JsonResponse,
+    KeyProvider, LlmProvider, Stage, Usage,
+};
 
 const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(90);
+const JSON_TIMEOUT: Duration = Duration::from_secs(90);
+const IMAGE_TIMEOUT: Duration = Duration::from_secs(150);
 const DEFAULT_BACKOFF: Duration = Duration::from_millis(600);
 const ATTEMPTS_PER_MODEL: u32 = 2;
 const MAX_TOKENS: u32 = 4000;
-const ERROR_SNIPPET_CHARS: usize = 160;
+const SNIPPET_CHARS: usize = 160;
+const REFUSAL_WORDS: [&str; 6] = [
+    "moderation",
+    "flagged",
+    "safety",
+    "content policy",
+    "content_policy",
+    "policy violation",
+];
 
 /// What to do after a failed call.
 enum Failure {
-    /// Give up entirely: the key or account is the problem.
+    /// Give up entirely: the key, the account or the content is the problem.
     Fatal(Error),
     /// Try the same model again after a pause.
     Retry(String),
     /// This model cannot serve the request; move to the next one.
     NextModel(String),
+}
+
+/// Why a successful HTTP response could not be used.
+enum Rejection {
+    /// The answer was empty or malformed.
+    Unusable(String),
+    /// The model answered in words instead of producing what was asked for.
+    Words(String),
+}
+
+struct Done<T> {
+    value: T,
+    model: String,
+    usage: Usage,
+    latency: Duration,
 }
 
 /// Calls hosted models through `OpenRouter`, with retries and fallback models.
@@ -48,10 +75,7 @@ impl OpenRouterProvider {
     #[must_use]
     pub fn with_base_url(keys: Arc<dyn KeyProvider>, base_url: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .timeout(DEFAULT_TIMEOUT)
-                .build()
-                .unwrap_or_default(),
+            client: reqwest::Client::new(),
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             keys,
             backoff: DEFAULT_BACKOFF,
@@ -65,15 +89,9 @@ impl OpenRouterProvider {
         self
     }
 
-    fn body(request: &JsonRequest, model: &str) -> Value {
+    fn json_body(request: &JsonRequest, model: &str) -> Value {
         let mut content = vec![json!({ "type": "text", "text": request.user_text })];
-        for image in &request.images {
-            let encoded = STANDARD.encode(&image.bytes);
-            content.push(json!({
-                "type": "image_url",
-                "image_url": { "url": format!("data:{};base64,{encoded}", image.mime) },
-            }));
-        }
+        content.extend(request.images.iter().map(image_part));
         let mut messages = vec![
             json!({ "role": "system", "content": request.system }),
             json!({ "role": "user", "content": content }),
@@ -101,29 +119,42 @@ impl OpenRouterProvider {
         })
     }
 
-    async fn call(
+    fn image_body(request: &ImageRequest, model: &str) -> Value {
+        let mut content = vec![json!({ "type": "text", "text": request.instruction })];
+        content.push(image_part(&request.original));
+        content.extend(request.preview.iter().map(image_part));
+        json!({
+            "model": model,
+            "messages": [{ "role": "user", "content": content }],
+            "modalities": ["image", "text"],
+            "usage": { "include": true },
+        })
+    }
+
+    async fn call<T>(
         &self,
         key: &SecretString,
-        request: &JsonRequest,
         model: &str,
-    ) -> std::result::Result<JsonResponse, Failure> {
+        body: &Value,
+        timeout: Duration,
+        extract: &impl Fn(&Value) -> std::result::Result<T, Rejection>,
+    ) -> std::result::Result<Done<T>, Failure> {
         let started = Instant::now();
         let response = self
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(key.expose_secret())
-            .json(&Self::body(request, model))
+            .timeout(timeout)
+            .json(body)
             .send()
             .await
             .map_err(|e| {
-                Failure::Retry(format!(
-                    "{model}: network error ({})",
-                    if e.is_timeout() {
-                        "timed out"
-                    } else {
-                        "unreachable"
-                    }
-                ))
+                let how = if e.is_timeout() {
+                    "timed out"
+                } else {
+                    "unreachable"
+                };
+                Failure::Retry(format!("{model}: network error ({how})"))
             })?;
 
         let status = response.status();
@@ -131,22 +162,109 @@ impl OpenRouterProvider {
         if !status.is_success() {
             return Err(classify(status.as_u16(), model, &payload));
         }
-        let content = payload["choices"][0]["message"]["content"]
-            .as_str()
-            .filter(|c| !c.trim().is_empty())
-            .ok_or_else(|| Failure::NextModel(format!("{model}: returned no content")))?;
-        Ok(JsonResponse {
-            content: content.to_owned(),
-            model: payload["model"].as_str().unwrap_or(model).to_owned(),
-            usage: parse_usage(&payload["usage"]),
-            latency: started.elapsed(),
-        })
+        match extract(&payload) {
+            Ok(value) => Ok(Done {
+                value,
+                model: payload["model"].as_str().unwrap_or(model).to_owned(),
+                usage: parse_usage(&payload["usage"]),
+                latency: started.elapsed(),
+            }),
+            Err(Rejection::Unusable(problem)) => {
+                Err(Failure::NextModel(format!("{model}: {problem}")))
+            }
+            Err(Rejection::Words(text)) => Err(Failure::NextModel(format!(
+                "{model}: replied with text: {text}"
+            ))),
+        }
     }
+
+    /// Try each model in turn, retrying transient failures, until one answers usably.
+    async fn run<T>(
+        &self,
+        stage: Stage,
+        models: &[String],
+        timeout: Duration,
+        build: impl Fn(&str) -> Value,
+        extract: impl Fn(&Value) -> std::result::Result<T, Rejection>,
+    ) -> Result<Done<T>> {
+        let key = self.keys.api_key().await?.ok_or_else(|| {
+            Error::Unavailable("An OpenRouter API key is required. Add one in Settings.".into())
+        })?;
+
+        let mut tried: Vec<&str> = Vec::new();
+        let mut last_problem = String::from("no models configured");
+        let mut spoke_instead: Option<String> = None;
+        for model in models {
+            if tried.contains(&model.as_str()) {
+                continue;
+            }
+            tried.push(model);
+            let body = build(model);
+            for attempt in 0..ATTEMPTS_PER_MODEL {
+                match self.call(&key, model, &body, timeout, &extract).await {
+                    Ok(done) => {
+                        tracing::info!(
+                            stage = stage.name(),
+                            model = %done.model,
+                            latency_ms = done.latency.as_millis(),
+                            cost_usd = done.usage.cost_usd,
+                            "model call succeeded"
+                        );
+                        return Ok(done);
+                    }
+                    Err(Failure::Fatal(error)) => return Err(error),
+                    Err(Failure::NextModel(problem)) => {
+                        tracing::warn!(stage = stage.name(), %problem, "model skipped");
+                        if let Some((_, text)) = problem.split_once("replied with text: ") {
+                            spoke_instead = Some(text.to_owned());
+                        }
+                        last_problem = problem;
+                        break;
+                    }
+                    Err(Failure::Retry(problem)) => {
+                        tracing::warn!(stage = stage.name(), %problem, attempt, "model call failed");
+                        last_problem = problem;
+                        if attempt + 1 < ATTEMPTS_PER_MODEL {
+                            tokio::time::sleep(self.backoff * 2_u32.pow(attempt)).await;
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(text) = spoke_instead {
+            return Err(Error::Refused(format!(
+                "The image model did not produce an image. It said: \u{201c}{text}\u{201d} Try a different edit."
+            )));
+        }
+        Err(Error::Unavailable(format!(
+            "The AI models are not responding right now ({last_problem}). Try again, or choose another model in Settings."
+        )))
+    }
+}
+
+fn image_part(image: &ImageInput) -> Value {
+    let encoded = STANDARD.encode(&image.bytes);
+    json!({
+        "type": "image_url",
+        "image_url": { "url": format!("data:{};base64,{encoded}", image.mime) },
+    })
+}
+
+fn snippet(text: &str) -> String {
+    text.chars().take(SNIPPET_CHARS).collect()
 }
 
 fn classify(status: u16, model: &str, payload: &Value) -> Failure {
     let detail = payload["error"]["message"].as_str().unwrap_or("no details");
-    let snippet: String = detail.chars().take(ERROR_SNIPPET_CHARS).collect();
+    let lowered = detail.to_lowercase();
+    let flagged = payload["error"]["metadata"]["reasons"].is_array()
+        || REFUSAL_WORDS.iter().any(|word| lowered.contains(word));
+    if matches!(status, 400 | 403 | 422) && flagged {
+        return Failure::Fatal(Error::Refused(
+            "The image model declined this edit on content-policy grounds. Try a different edit."
+                .into(),
+        ));
+    }
     match status {
         401 | 403 => Failure::Fatal(Error::Unavailable(
             "OpenRouter rejected the API key. Check it in Settings.".into(),
@@ -154,8 +272,10 @@ fn classify(status: u16, model: &str, payload: &Value) -> Failure {
         402 => Failure::Fatal(Error::Unavailable(
             "Your OpenRouter account is out of credits. Add credits at openrouter.ai.".into(),
         )),
-        408 | 429 | 500..=599 => Failure::Retry(format!("{model}: HTTP {status} ({snippet})")),
-        _ => Failure::NextModel(format!("{model}: HTTP {status} ({snippet})")),
+        408 | 429 | 500..=599 => {
+            Failure::Retry(format!("{model}: HTTP {status} ({})", snippet(detail)))
+        }
+        _ => Failure::NextModel(format!("{model}: HTTP {status} ({})", snippet(detail))),
     }
 }
 
@@ -167,51 +287,73 @@ fn parse_usage(usage: &Value) -> Usage {
     }
 }
 
+fn text_of(payload: &Value) -> Option<&str> {
+    payload["choices"][0]["message"]["content"]
+        .as_str()
+        .filter(|c| !c.trim().is_empty())
+}
+
+/// Decode the first `data:` URL image in a response.
+fn first_image(payload: &Value) -> std::result::Result<Vec<u8>, Rejection> {
+    let url = payload["choices"][0]["message"]["images"][0]["image_url"]["url"].as_str();
+    let Some(url) = url else {
+        return Err(match text_of(payload) {
+            Some(text) => Rejection::Words(snippet(text)),
+            None => Rejection::Unusable("returned no image".into()),
+        });
+    };
+    let encoded = url
+        .split_once(";base64,")
+        .map(|(_, data)| data)
+        .ok_or_else(|| Rejection::Unusable("returned an image that is not base64 data".into()))?;
+    STANDARD
+        .decode(encoded)
+        .map_err(|_| Rejection::Unusable("returned an image that could not be decoded".into()))
+}
+
 #[async_trait]
 impl LlmProvider for OpenRouterProvider {
     async fn complete_json(&self, request: JsonRequest) -> Result<JsonResponse> {
-        let key = self.keys.api_key().await?.ok_or_else(|| {
-            Error::Unavailable("An OpenRouter API key is required. Add one in Settings.".into())
-        })?;
+        let done = self
+            .run(
+                request.stage,
+                &request.models,
+                JSON_TIMEOUT,
+                |model| Self::json_body(&request, model),
+                |payload| {
+                    text_of(payload)
+                        .map(str::to_owned)
+                        .ok_or_else(|| Rejection::Unusable("returned no content".into()))
+                },
+            )
+            .await?;
+        Ok(JsonResponse {
+            content: done.value,
+            model: done.model,
+            usage: done.usage,
+            latency: done.latency,
+        })
+    }
+}
 
-        let mut tried: Vec<&str> = Vec::new();
-        let mut last_problem = String::from("no models configured");
-        for model in &request.models {
-            if tried.contains(&model.as_str()) {
-                continue;
-            }
-            tried.push(model);
-            for attempt in 0..ATTEMPTS_PER_MODEL {
-                match self.call(&key, &request, model).await {
-                    Ok(response) => {
-                        tracing::info!(
-                            stage = request.stage.name(),
-                            model = %response.model,
-                            latency_ms = response.latency.as_millis(),
-                            cost_usd = response.usage.cost_usd,
-                            "model call succeeded"
-                        );
-                        return Ok(response);
-                    }
-                    Err(Failure::Fatal(error)) => return Err(error),
-                    Err(Failure::NextModel(problem)) => {
-                        tracing::warn!(stage = request.stage.name(), %problem, "model skipped");
-                        last_problem = problem;
-                        break;
-                    }
-                    Err(Failure::Retry(problem)) => {
-                        tracing::warn!(stage = request.stage.name(), %problem, attempt, "model call failed");
-                        last_problem = problem;
-                        if attempt + 1 < ATTEMPTS_PER_MODEL {
-                            tokio::time::sleep(self.backoff * 2_u32.pow(attempt)).await;
-                        }
-                    }
-                }
-            }
-        }
-        Err(Error::Unavailable(format!(
-            "The AI models are not responding right now ({last_problem}). Try again, or choose another model in Settings."
-        )))
+#[async_trait]
+impl ImageGenerator for OpenRouterProvider {
+    async fn generate(&self, request: ImageRequest) -> Result<ImageResponse> {
+        let done = self
+            .run(
+                Stage::Generator,
+                &request.models,
+                IMAGE_TIMEOUT,
+                |model| Self::image_body(&request, model),
+                first_image,
+            )
+            .await?;
+        Ok(ImageResponse {
+            bytes: done.value,
+            model: done.model,
+            usage: done.usage,
+            latency: done.latency,
+        })
     }
 }
 
@@ -501,5 +643,195 @@ mod tests {
             .await
             .unwrap_err();
         assert!(!error.to_string().contains("sk-very-secret"));
+    }
+
+    fn image_ok(bytes: &[u8]) -> (u16, Value) {
+        (
+            200,
+            json!({
+                "model": "google/served-image",
+                "choices": [{ "message": {
+                    "content": "Here you go",
+                    "images": [{ "image_url": { "url": format!("data:image/png;base64,{}", STANDARD.encode(bytes)) } }],
+                } }],
+                "usage": { "prompt_tokens": 900, "completion_tokens": 1300, "cost": 0.139 },
+            }),
+        )
+    }
+
+    fn image_request(models: &[&str], with_preview: bool) -> ImageRequest {
+        ImageRequest {
+            models: models.iter().map(|m| (*m).to_owned()).collect(),
+            instruction: "Shorten the couch".into(),
+            original: ImageInput {
+                mime: "image/jpeg",
+                bytes: vec![1, 2, 3],
+            },
+            preview: with_preview.then(|| ImageInput {
+                mime: "image/png",
+                bytes: vec![4, 5, 6],
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn generates_an_image_and_sends_text_original_and_preview_in_that_order() {
+        let (up, url) = upstream(vec![image_ok(b"PNGDATA")]).await;
+        let response = provider(&url, Some("k"))
+            .generate(image_request(&["gen"], true))
+            .await
+            .unwrap();
+
+        assert_eq!(response.bytes, b"PNGDATA");
+        assert_eq!(response.model, "google/served-image");
+        assert_eq!(response.usage.cost_usd, Some(0.139));
+
+        let body = up.seen.lock().unwrap()[0].1.clone();
+        assert_eq!(body["modalities"], json!(["image", "text"]));
+        assert!(
+            body.get("response_format").is_none(),
+            "image requests are not schema-constrained"
+        );
+        let parts = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0]["text"], "Shorten the couch");
+        let urls: Vec<&str> = parts[1..]
+            .iter()
+            .map(|p| p["image_url"]["url"].as_str().unwrap())
+            .collect();
+        assert!(urls[0].starts_with("data:image/jpeg;base64,"));
+        assert!(urls[1].starts_with("data:image/png;base64,"));
+    }
+
+    #[tokio::test]
+    async fn the_preview_is_optional() {
+        let (up, url) = upstream(vec![image_ok(b"x")]).await;
+        provider(&url, Some("k"))
+            .generate(image_request(&["gen"], false))
+            .await
+            .unwrap();
+        let body = up.seen.lock().unwrap()[0].1.clone();
+        assert_eq!(body["messages"][0]["content"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_model_that_answers_in_words_is_reported_as_a_refusal_with_what_it_said() {
+        let reply = (
+            200,
+            json!({ "choices": [{ "message": { "content": "I can't edit photos of people." } }] }),
+        );
+        let (_, url) = upstream(vec![reply]).await;
+        let error = provider(&url, Some("k"))
+            .generate(image_request(&["gen"], true))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, Error::Refused(m) if m.contains("can't edit photos of people")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn moderation_blocks_are_refusals_not_key_problems_and_do_not_fall_back() {
+        let blocked = (
+            403,
+            json!({ "error": { "message": "Input flagged", "metadata": { "reasons": ["violence"] } } }),
+        );
+        let (up, url) = upstream(vec![blocked]).await;
+        let error = provider(&url, Some("k"))
+            .generate(image_request(&["a", "b"], true))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, Error::Refused(m) if m.contains("content-policy")),
+            "{error}"
+        );
+        assert_eq!(up.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn safety_system_rejections_are_refusals() {
+        let blocked = (
+            400,
+            json!({ "error": { "message": "Your request was rejected by the safety system." } }),
+        );
+        let (_, url) = upstream(vec![blocked]).await;
+        let error = provider(&url, Some("k"))
+            .generate(image_request(&["gen"], true))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::Refused(_)));
+    }
+
+    #[tokio::test]
+    async fn an_empty_answer_moves_on_to_the_next_model() {
+        let empty = (
+            200,
+            json!({ "choices": [{ "message": { "content": null } }] }),
+        );
+        let (up, url) = upstream(vec![empty, image_ok(b"second")]).await;
+        let response = provider(&url, Some("k"))
+            .generate(image_request(&["first", "second"], true))
+            .await
+            .unwrap();
+        assert_eq!(response.bytes, b"second");
+        assert_eq!(up.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn undecodable_images_are_skipped_and_exhaustion_is_reported_as_unavailable() {
+        let garbage = || {
+            (
+                200,
+                json!({ "choices": [{ "message": { "images": [{ "image_url": { "url": "data:image/png;base64,@@@" } }] } }] }),
+            )
+        };
+        let (_, url) = upstream(vec![garbage(), garbage()]).await;
+        let error = provider(&url, Some("k"))
+            .generate(image_request(&["a", "b"], true))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, Error::Unavailable(m) if m.contains("not responding")),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn image_calls_retry_transient_errors() {
+        let (up, url) = upstream(vec![(503, json!({})), image_ok(b"ok")]).await;
+        provider(&url, Some("k"))
+            .generate(image_request(&["gen"], true))
+            .await
+            .unwrap();
+        assert_eq!(up.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn dropping_the_future_abandons_the_request_so_jobs_can_be_cancelled() {
+        // The upstream never answers; cancelling must return promptly instead of waiting for it.
+        let app = Router::new().route(
+            "/chat/completions",
+            post(|| async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                StatusCode::OK
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let generator = provider(&url, Some("k"));
+        let started = Instant::now();
+        let outcome = tokio::time::timeout(
+            Duration::from_millis(200),
+            generator.generate(image_request(&["gen"], true)),
+        )
+        .await;
+        assert!(
+            outcome.is_err(),
+            "the call should still be waiting when the timeout drops it"
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 }

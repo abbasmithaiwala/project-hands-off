@@ -15,6 +15,8 @@ pub enum Stage {
     UiPlanner,
     /// Summarises edits.
     Summariser,
+    /// Generates the edited image.
+    Generator,
 }
 
 impl Stage {
@@ -25,6 +27,7 @@ impl Stage {
             Self::Suggester => "suggester",
             Self::UiPlanner => "ui_planner",
             Self::Summariser => "summariser",
+            Self::Generator => "generator",
         }
     }
 }
@@ -108,4 +111,41 @@ pub trait LlmProvider: Send + Sync {
 pub trait KeyProvider: Send + Sync {
     /// The current key, if one is configured.
     async fn api_key(&self) -> Result<Option<SecretString>>;
+}
+
+/// Everything needed to ask an image model for an edit.
+#[derive(Debug, Clone)]
+pub struct ImageRequest {
+    /// Models to try in order.
+    pub models: Vec<String>,
+    /// The instruction text.
+    pub instruction: String,
+    /// The original photo, shown first.
+    pub original: ImageInput,
+    /// A rough preview of the desired result, used as a geometry reference.
+    pub preview: Option<ImageInput>,
+}
+
+/// An image produced by a model.
+#[derive(Debug, Clone)]
+pub struct ImageResponse {
+    /// Encoded image bytes (PNG, JPEG or WebP).
+    pub bytes: Vec<u8>,
+    /// The model that produced it.
+    pub model: String,
+    /// Token usage and cost.
+    pub usage: Usage,
+    /// Time the successful call took.
+    pub latency: Duration,
+}
+
+/// Something that can produce an edited image.
+#[async_trait]
+pub trait ImageGenerator: Send + Sync {
+    /// Generate the edited image.
+    ///
+    /// # Errors
+    /// [`hands_off_core::Error::Unavailable`] if no key is set, credits are exhausted or no model
+    /// responds, and [`hands_off_core::Error::Refused`] if the model declines the request.
+    async fn generate(&self, request: ImageRequest) -> Result<ImageResponse>;
 }

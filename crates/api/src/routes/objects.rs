@@ -1,14 +1,14 @@
 //! AI-assisted editing controls for one detected object.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use hands_off_core::model::{PropertyList, Widget};
 use hands_off_core::{ImageId, ObjectId};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::ai;
-use crate::error::{ApiError, ErrorBody};
+use crate::error::{ApiError, ApiJson, ApiPath, ErrorBody};
 use crate::state::AppState;
 
 /// Which property to place a control for.
@@ -37,7 +37,7 @@ pub struct PlanWidget {
 )]
 pub async fn properties(
     State(state): State<AppState>,
-    Path((id, object_id)): Path<(ImageId, u32)>,
+    ApiPath((id, object_id)): ApiPath<(ImageId, u32)>,
 ) -> Result<Json<PropertyList>, ApiError> {
     Ok(Json(ai::properties(&state, id, ObjectId(object_id)).await?))
 }
@@ -63,8 +63,8 @@ pub async fn properties(
 )]
 pub async fn widget(
     State(state): State<AppState>,
-    Path((id, object_id)): Path<(ImageId, u32)>,
-    Json(body): Json<PlanWidget>,
+    ApiPath((id, object_id)): ApiPath<(ImageId, u32)>,
+    ApiJson(body): ApiJson<PlanWidget>,
 ) -> Result<Json<Widget>, ApiError> {
     Ok(Json(
         ai::widget(&state, id, ObjectId(object_id), &body.property).await?,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { EditChange, Widget } from '@/api/client'
 import { editKey, type PendingEdit } from '@/state/editorStore'
 import { detectedObject } from '@/test/utils'
-import { buildPreviews, deformationFor, reachFor } from './previews'
+import { affectedRegions, buildPreviews, deformationFor, reachFor, requestEdits } from './previews'
 
 const size = { width: 1000, height: 500 }
 const bbox = { x: 0.2, y: 0.2, width: 0.5, height: 0.5 }
@@ -108,5 +108,46 @@ describe('reachFor', () => {
     expect(reachFor(detectedObject(0, 'x'), { width: 300, height: 400 })).toBeCloseTo(
       0.6 * Math.hypot(150, 200),
     )
+  })
+})
+
+describe('requestEdits', () => {
+  it('adds the slider axis so the edit can be described in words', () => {
+    const [edit] = requestEdits([pending(0, slider, { kind: 'slider', value: 0.7 })])
+    expect(edit?.change).toEqual({
+      kind: 'slider',
+      value: 0.7,
+      axis: { start: { x: 0.2, y: 0.5 }, end: { x: 0.7, y: 0.5 } },
+    })
+  })
+
+  it('leaves point edits untouched', () => {
+    const change: EditChange = {
+      kind: 'multi_handle',
+      origin: [{ x: 0.3, y: 0.3 }],
+      target: [{ x: 0.4, y: 0.3 }],
+    }
+    expect(requestEdits([pending(0, handles, change)])[0]?.change).toEqual(change)
+  })
+})
+
+describe('affectedRegions', () => {
+  const objects = [detectedObject(0, 'couch'), detectedObject(1, 'lamp')]
+
+  it('returns one region per edited object, covering the object', () => {
+    const regions = affectedRegions(
+      [pending(1, slider, { kind: 'slider', value: 0.5 })],
+      objects,
+      size,
+    )
+    expect(regions).toHaveLength(1)
+    expect(regions[0]?.x).toBeLessThanOrEqual(objects[1]?.bbox.x ?? 1)
+  })
+
+  it('is empty when nothing has really changed', () => {
+    expect(
+      affectedRegions([pending(0, slider, { kind: 'slider', value: 1 })], objects, size),
+    ).toEqual([])
+    expect(affectedRegions([], objects, size)).toEqual([])
   })
 })
