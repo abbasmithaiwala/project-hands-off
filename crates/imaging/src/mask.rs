@@ -227,6 +227,27 @@ impl Mask {
             .collect()
     }
 
+    /// Move `point` onto the nearest foreground pixel, or leave it if it is already on the
+    /// mask (or the mask is empty).
+    #[must_use]
+    pub fn snap(&self, point: NormalizedPoint) -> NormalizedPoint {
+        let (px, py) = (
+            (point.x * self.width as f32).floor() as i32,
+            (point.y * self.height as f32).floor() as i32,
+        );
+        if self.get(px, py) {
+            return point;
+        }
+        let nearest = (0..self.height as i32)
+            .flat_map(|y| (0..self.width as i32).map(move |x| (x, y)))
+            .filter(|&(x, y)| self.get(x, y))
+            .min_by_key(|&(x, y)| i64::from(x - px).pow(2) + i64::from(y - py).pow(2));
+        nearest.map_or(point, |(x, y)| NormalizedPoint {
+            x: (x as f32 + 0.5) / self.width as f32,
+            y: (y as f32 + 0.5) / self.height as f32,
+        })
+    }
+
     /// Encode as a grayscale PNG (255 foreground, 0 background).
     ///
     /// # Errors
@@ -405,6 +426,24 @@ mod tests {
             let distance = (p.x * 100.0 - cx).hypot(p.y * 100.0 - cy);
             assert!((distance - r).abs() < 2.5, "{distance}");
         }
+    }
+
+    #[test]
+    fn snap_leaves_points_on_the_mask_and_pulls_others_onto_it() {
+        let mask = rect(40, 40, 10, 10, 20, 20);
+        let inside = NormalizedPoint::new(0.375, 0.375).unwrap();
+        assert_eq!(mask.snap(inside), inside);
+
+        let outside = NormalizedPoint::new(0.9, 0.9).unwrap();
+        let snapped = mask.snap(outside);
+        assert!(mask.get((snapped.x * 40.0) as i32, (snapped.y * 40.0) as i32));
+        assert!(snapped.x < 0.55 && snapped.y < 0.55, "{snapped:?}");
+    }
+
+    #[test]
+    fn snap_on_an_empty_mask_changes_nothing() {
+        let point = NormalizedPoint::new(0.3, 0.3).unwrap();
+        assert_eq!(rect(8, 8, 0, 0, 0, 0).snap(point), point);
     }
 
     #[test]

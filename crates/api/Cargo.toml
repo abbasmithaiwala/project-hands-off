@@ -28,8 +28,11 @@ dotenvy = "0.15.7"
 futures.workspace = true
 hands-off-core = { version = "0.1.0", path = "../core" }
 hands-off-imaging = { version = "0.1.0", path = "../imaging" }
+hands-off-llm = { path = "../llm" }
 hands-off-vision = { path = "../vision" }
 hex.workspace = true
+image.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

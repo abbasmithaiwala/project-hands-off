@@ -14,8 +14,8 @@ workspace = true
 [dependencies]
 async-trait.workspace = true
 chrono.workspace = true
-schemars = { version = "1.2.3", features = ["uuid1", "chrono04"] }
-secrecy = "0.10.3"
+schemars.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

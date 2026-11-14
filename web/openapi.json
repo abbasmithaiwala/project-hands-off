@@ -276,6 +276,138 @@
         }
       }
     },
+    "/api/v1/images/{id}/objects/{object_id}/properties": {
+      "post": {
+        "tags": ["objects"],
+        "summary": "Suggest the properties that can be edited on an object.",
+        "description": "Results are cached, so repeated calls are free. Calls a model on first use.",
+        "operationId": "properties",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          },
+          {
+            "name": "object_id",
+            "in": "path",
+            "description": "Object index within the image",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropertyList"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image or object, or not analysed yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No API key, no credits, or the models are unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}/objects/{object_id}/widget": {
+      "post": {
+        "tags": ["objects"],
+        "summary": "Place the on-canvas control for one property of an object.",
+        "description": "Results are cached. The geometry is validated and snapped onto the object's mask; if the\nmodel cannot produce a usable plan, a sensible default placement is returned instead.",
+        "operationId": "widget",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          },
+          {
+            "name": "object_id",
+            "in": "path",
+            "description": "Object index within the image",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanWidget"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Widget"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image, object or property",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No API key, no credits, or the models are unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images/{id}/original": {
       "get": {
         "tags": ["images"],
@@ -472,6 +604,104 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "tags": ["settings"],
+        "summary": "Read the current settings.",
+        "operationId": "get_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/models": {
+      "put": {
+        "tags": ["settings"],
+        "summary": "Choose the model for each AI stage. Any OpenRouter model id is accepted.",
+        "operationId": "set_models",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A model id is malformed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/openrouter-key": {
+      "put": {
+        "tags": ["settings"],
+        "summary": "Save the OpenRouter API key. It is stored on the server and never returned.",
+        "operationId": "set_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Key saved"
+          },
+          "400": {
+            "description": "That does not look like an API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["settings"],
+        "summary": "Remove the stored API key. A key set through the environment is unaffected.",
+        "operationId": "clear_key",
+        "responses": {
+          "204": {
+            "description": "Key removed"
           }
         }
       }
@@ -906,6 +1136,53 @@
         "description": "Lifecycle state of a job.",
         "enum": ["running", "completed", "failed", "cancelled"]
       },
+      "KeyOrigin": {
+        "type": "string",
+        "description": "Where the OpenRouter key comes from.",
+        "enum": ["environment", "stored", "demo", "none"]
+      },
+      "KeyStatus": {
+        "type": "object",
+        "description": "Whether AI features can run, without revealing any secret.",
+        "required": ["configured", "origin"],
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "description": "True when AI requests can be made."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/KeyOrigin",
+            "description": "Where the key comes from."
+          }
+        }
+      },
+      "ModelSettings": {
+        "type": "object",
+        "description": "Which model each AI stage uses. Any OpenRouter model id is allowed, including\n`typesafe/jev-router`, which picks a model and reasoning effort per request.",
+        "required": ["suggester", "ui_planner", "summariser", "generator", "fallback"],
+        "properties": {
+          "fallback": {
+            "type": "string",
+            "description": "Tried when the stage's own model fails or is unavailable."
+          },
+          "generator": {
+            "type": "string",
+            "description": "Generates the edited image."
+          },
+          "suggester": {
+            "type": "string",
+            "description": "Suggests editable properties for an object."
+          },
+          "summariser": {
+            "type": "string",
+            "description": "Summarises edits into instructions and change logs."
+          },
+          "ui_planner": {
+            "type": "string",
+            "description": "Plans where a control sits on the canvas."
+          }
+        }
+      },
       "NormalizedPoint": {
         "type": "object",
         "description": "A point in normalised image coordinates (origin top-left).",
@@ -929,6 +1206,17 @@
         "description": "Index of a detected object within one image.",
         "minimum": 0
       },
+      "PlanWidget": {
+        "type": "object",
+        "description": "Which property to place a control for.",
+        "required": ["property"],
+        "properties": {
+          "property": {
+            "type": "string",
+            "description": "A property key returned by the properties route."
+          }
+        }
+      },
       "Property": {
         "type": "object",
         "description": "An editable property of an object.",
@@ -945,6 +1233,46 @@
           "widget": {
             "$ref": "#/components/schemas/WidgetKind",
             "description": "Control used to edit it."
+          }
+        }
+      },
+      "PropertyList": {
+        "type": "object",
+        "description": "The editable properties suggested for one object.",
+        "required": ["properties"],
+        "properties": {
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Property"
+            },
+            "description": "Properties, most useful first."
+          }
+        }
+      },
+      "SetKey": {
+        "type": "object",
+        "description": "Body for saving an API key.",
+        "required": ["key"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The OpenRouter API key."
+          }
+        }
+      },
+      "SettingsView": {
+        "type": "object",
+        "description": "Current settings.",
+        "required": ["openrouter", "models"],
+        "properties": {
+          "models": {
+            "$ref": "#/components/schemas/ModelSettings",
+            "description": "The model used by each AI stage."
+          },
+          "openrouter": {
+            "$ref": "#/components/schemas/KeyStatus",
+            "description": "State of the OpenRouter key."
           }
         }
       },
@@ -1046,6 +1374,14 @@
     {
       "name": "images",
       "description": "Upload and fetch images"
+    },
+    {
+      "name": "objects",
+      "description": "AI-assisted controls for detected objects"
+    },
+    {
+      "name": "settings",
+      "description": "API key and model choices"
     },
     {
       "name": "jobs",

@@ -18,7 +18,7 @@ hands-off-imaging = { version = "0.1.0", path = "../imaging" }
 hex.workspace = true
 image.workspace = true
 ort = "2.0.0-rc.15"
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
+reqwest = { workspace = true, features = ["stream"] }
 serde_json.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "rt", "macros"] }

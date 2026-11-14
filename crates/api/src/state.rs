@@ -6,8 +6,13 @@ use hands_off_core::storage::{BlobStore, ProjectStore};
 use hands_off_core::{Config, Error, Result};
 use tokio::fs;
 
+use hands_off_llm::LlmProvider;
+use hands_off_llm::demo::DemoProvider;
+use hands_off_llm::openrouter::OpenRouterProvider;
+
 use crate::detection::{DetectorProvider, LazyRfDetr};
 use crate::jobs::JobManager;
+use crate::settings::Settings;
 use crate::storage::{FsBlobStore, SqliteStore};
 
 /// Everything a request handler needs. Cheap to clone.
@@ -23,6 +28,10 @@ pub struct AppState {
     pub jobs: JobManager,
     /// Source of the object detector.
     pub detectors: Arc<dyn DetectorProvider>,
+    /// User settings (API key, models).
+    pub settings: Settings,
+    /// Hosted language and vision models.
+    pub llm: Arc<dyn LlmProvider>,
 }
 
 impl AppState {
@@ -31,13 +40,28 @@ impl AppState {
     pub fn new(config: Config, blobs: Arc<dyn BlobStore>, store: Arc<dyn ProjectStore>) -> Self {
         let jobs = JobManager::new(Arc::clone(&store), config.job_timeout);
         let detectors = Arc::new(LazyRfDetr::from_config(&config));
+        let settings = Settings::new(config.openrouter_api_key.clone(), Arc::clone(&store));
+        let llm: Arc<dyn LlmProvider> = if config.demo_ai {
+            Arc::new(DemoProvider)
+        } else {
+            Arc::new(OpenRouterProvider::new(Arc::new(settings.clone())))
+        };
         Self {
             config: Arc::new(config),
             blobs,
             store,
             jobs,
             detectors,
+            settings,
+            llm,
         }
+    }
+
+    /// Replace the model provider (used by tests and custom setups).
+    #[must_use]
+    pub fn with_llm(mut self, llm: Arc<dyn LlmProvider>) -> Self {
+        self.llm = llm;
+        self
     }
 
     /// Replace the detector source (used by tests and custom setups).

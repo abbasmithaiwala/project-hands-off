@@ -110,6 +110,47 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/images/{id}/objects/{object_id}/properties': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suggest the properties that can be edited on an object.
+     * @description Results are cached, so repeated calls are free. Calls a model on first use.
+     */
+    post: operations['properties']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/images/{id}/objects/{object_id}/widget': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Place the on-canvas control for one property of an object.
+     * @description Results are cached. The geometry is validated and snapped onto the object's mask; if the
+     *     model cannot produce a usable plan, a sensible default placement is returned instead.
+     */
+    post: operations['widget']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/images/{id}/original': {
     parameters: {
       query?: never
@@ -177,6 +218,58 @@ export interface paths {
     put?: never
     post?: never
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/settings': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read the current settings. */
+    get: operations['get_settings']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/settings/models': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Choose the model for each AI stage. Any OpenRouter model id is accepted. */
+    put: operations['set_models']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/settings/openrouter-key': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Save the OpenRouter API key. It is stored on the server and never returned. */
+    put: operations['set_key']
+    post?: never
+    /** Remove the stored API key. A key set through the environment is unaffected. */
+    delete: operations['clear_key']
     options?: never
     head?: never
     patch?: never
@@ -413,6 +506,34 @@ export interface components {
      * @enum {string}
      */
     JobStatus: 'running' | 'completed' | 'failed' | 'cancelled'
+    /**
+     * @description Where the OpenRouter key comes from.
+     * @enum {string}
+     */
+    KeyOrigin: 'environment' | 'stored' | 'demo' | 'none'
+    /** @description Whether AI features can run, without revealing any secret. */
+    KeyStatus: {
+      /** @description True when AI requests can be made. */
+      configured: boolean
+      /** @description Where the key comes from. */
+      origin: components['schemas']['KeyOrigin']
+    }
+    /**
+     * @description Which model each AI stage uses. Any OpenRouter model id is allowed, including
+     *     `typesafe/jev-router`, which picks a model and reasoning effort per request.
+     */
+    ModelSettings: {
+      /** @description Tried when the stage's own model fails or is unavailable. */
+      fallback: string
+      /** @description Generates the edited image. */
+      generator: string
+      /** @description Suggests editable properties for an object. */
+      suggester: string
+      /** @description Summarises edits into instructions and change logs. */
+      summariser: string
+      /** @description Plans where a control sits on the canvas. */
+      ui_planner: string
+    }
     /** @description A point in normalised image coordinates (origin top-left). */
     NormalizedPoint: {
       /**
@@ -431,6 +552,11 @@ export interface components {
      * @description Index of a detected object within one image.
      */
     ObjectId: number
+    /** @description Which property to place a control for. */
+    PlanWidget: {
+      /** @description A property key returned by the properties route. */
+      property: string
+    }
     /** @description An editable property of an object. */
     Property: {
       /** @description Stable key, for example `length`. */
@@ -439,6 +565,23 @@ export interface components {
       label: string
       /** @description Control used to edit it. */
       widget: components['schemas']['WidgetKind']
+    }
+    /** @description The editable properties suggested for one object. */
+    PropertyList: {
+      /** @description Properties, most useful first. */
+      properties: components['schemas']['Property'][]
+    }
+    /** @description Body for saving an API key. */
+    SetKey: {
+      /** @description The OpenRouter API key. */
+      key: string
+    }
+    /** @description Current settings. */
+    SettingsView: {
+      /** @description The model used by each AI stage. */
+      models: components['schemas']['ModelSettings']
+      /** @description State of the OpenRouter key. */
+      openrouter: components['schemas']['KeyStatus']
     }
     /** @description Multipart form accepted by the upload endpoint. */
     UploadForm: {
@@ -706,6 +849,94 @@ export interface operations {
       }
     }
   }
+  properties: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+        /** @description Object index within the image */
+        object_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PropertyList']
+        }
+      }
+      /** @description Unknown image or object, or not analysed yet */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+      /** @description No API key, no credits, or the models are unreachable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  widget: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+        /** @description Object index within the image */
+        object_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlanWidget']
+      }
+    }
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Widget']
+        }
+      }
+      /** @description Unknown image, object or property */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+      /** @description No API key, no credits, or the models are unreachable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
   get_original: {
     parameters: {
       query?: never
@@ -860,6 +1091,106 @@ export interface operations {
         content: {
           'application/json': components['schemas']['ErrorBody']
         }
+      }
+    }
+  }
+  get_settings: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SettingsView']
+        }
+      }
+    }
+  }
+  set_models: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ModelSettings']
+      }
+    }
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SettingsView']
+        }
+      }
+      /** @description A model id is malformed */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  set_key: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetKey']
+      }
+    }
+    responses: {
+      /** @description Key saved */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description That does not look like an API key */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  clear_key: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Key removed */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
     }
   }

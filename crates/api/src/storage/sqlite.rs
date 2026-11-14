@@ -199,6 +199,38 @@ impl ProjectStore for SqliteStore {
         Ok(())
     }
 
+    async fn setting(&self, key: &str) -> Result<Option<String>> {
+        let row = sqlx::query("SELECT value FROM settings WHERE key = ?")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Error::internal)?;
+        row.map(|r| r.try_get("value").map_err(Error::internal))
+            .transpose()
+    }
+
+    async fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO settings (key, value) VALUES (?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await
+        .map_err(Error::internal)?;
+        Ok(())
+    }
+
+    async fn delete_setting(&self, key: &str) -> Result<()> {
+        sqlx::query("DELETE FROM settings WHERE key = ?")
+            .bind(key)
+            .execute(&self.pool)
+            .await
+            .map_err(Error::internal)?;
+        Ok(())
+    }
+
     async fn job_by_id(&self, id: JobId) -> Result<Option<JobRecord>> {
         let row = sqlx::query("SELECT * FROM jobs WHERE id = ?")
             .bind(id.to_string())
@@ -294,6 +326,18 @@ mod tests {
         assert_eq!(done.error_code, Some(ErrorCode::Timeout));
         assert_eq!(done.error_message.as_deref(), Some("too slow"));
         assert!(done.finished_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn settings_can_be_set_replaced_and_deleted() {
+        let store = SqliteStore::in_memory().await.unwrap();
+        assert_eq!(store.setting("k").await.unwrap(), None);
+        store.set_setting("k", "one").await.unwrap();
+        store.set_setting("k", "two").await.unwrap();
+        assert_eq!(store.setting("k").await.unwrap().as_deref(), Some("two"));
+        store.delete_setting("k").await.unwrap();
+        store.delete_setting("k").await.unwrap();
+        assert_eq!(store.setting("k").await.unwrap(), None);
     }
 
     #[tokio::test]

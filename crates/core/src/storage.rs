@@ -57,6 +57,14 @@ impl BlobKey {
         Self(format!("images/{id}/masks/{}.png", object.0))
     }
 
+    /// Key for a cached AI result (property suggestions, widget plans).
+    ///
+    /// # Errors
+    /// [`Error::Validation`] if `name` is not a valid key segment.
+    pub fn ai_cache(id: ImageId, object: ObjectId, name: &str) -> Result<Self> {
+        Self::new(format!("images/{id}/objects/{}/{name}.json", object.0))
+    }
+
     /// The key as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -111,6 +119,15 @@ pub trait ProjectStore: Send + Sync {
 
     /// Find a job by id.
     async fn job_by_id(&self, id: JobId) -> Result<Option<JobRecord>>;
+
+    /// Read a stored setting.
+    async fn setting(&self, key: &str) -> Result<Option<String>>;
+
+    /// Create or replace a setting.
+    async fn set_setting(&self, key: &str, value: &str) -> Result<()>;
+
+    /// Remove a setting. Removing a missing setting is not an error.
+    async fn delete_setting(&self, key: &str) -> Result<()>;
 }
 
 #[cfg(test)]

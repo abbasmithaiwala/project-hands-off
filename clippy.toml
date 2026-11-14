@@ -1,4 +1,4 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
-doc-valid-idents = ["OpenRouter", "SQLite", "OpenAPI", "TypeScript", "RF-DETR", "ONNX", "..", "SSE"]
+doc-valid-idents = ["OpenRouter", "SQLite", "OpenAPI", "TypeScript", "RF-DETR", "ONNX", "..", "SSE", "snake_case", "JSON", "EXIF", "PNG", "JPEG", "WebP", "CoreML", "SAM"]

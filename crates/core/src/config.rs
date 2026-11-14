@@ -47,6 +47,8 @@ pub struct Config {
     pub rfdetr_seg_url: Option<String>,
     /// Expected SHA-256 of the RF-DETR-Seg model, if known.
     pub rfdetr_seg_sha256: Option<String>,
+    /// Answer AI requests from built-in rules instead of calling models (no key needed).
+    pub demo_ai: bool,
     /// OpenRouter API key, if provided.
     pub openrouter_api_key: Option<SecretString>,
     /// Upload limits.
@@ -124,6 +126,8 @@ impl Config {
                 .map_or_else(|| PathBuf::from("models"), PathBuf::from),
             rfdetr_seg_url: get("HANDS_OFF_RFDETR_SEG_URL"),
             rfdetr_seg_sha256: get("HANDS_OFF_RFDETR_SEG_SHA256"),
+            demo_ai: get("HANDS_OFF_DEMO_AI")
+                .is_some_and(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes")),
             openrouter_api_key: get("OPENROUTER_API_KEY").map(SecretString::from),
             limits: Limits {
                 max_upload_bytes: max_upload_mb * BYTES_PER_MB,
@@ -177,6 +181,7 @@ mod tests {
         assert_eq!(cfg.limits, Limits::default());
         assert!(cfg.openrouter_api_key.is_none());
         assert!(cfg.rfdetr_seg_url.is_none());
+        assert!(!cfg.demo_ai);
         assert_eq!(cfg.cors_origins.len(), 2);
     }
 
@@ -198,6 +203,24 @@ mod tests {
         assert_eq!(cfg.data_dir, PathBuf::from("/var/lib/hands-off"));
         assert_eq!(cfg.cors_origins, ["https://a.example", "https://b.example"]);
         assert_eq!(cfg.openrouter_api_key.unwrap().expose_secret(), "sk-test");
+    }
+
+    #[test]
+    fn demo_ai_accepts_common_truthy_spellings_only() {
+        for (value, expected) in [
+            ("1", true),
+            ("TRUE", true),
+            ("yes", true),
+            ("0", false),
+            ("no", false),
+            ("maybe", false),
+        ] {
+            assert_eq!(
+                config(&[("HANDS_OFF_DEMO_AI", value)]).unwrap().demo_ai,
+                expected,
+                "{value}"
+            );
+        }
     }
 
     #[test]

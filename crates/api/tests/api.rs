@@ -1,126 +1,20 @@
 //! End-to-end tests of the HTTP API through the real router, with in-memory storage.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::io::Cursor;
+mod common;
+
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use async_trait::async_trait;
-use axum::Router;
 use axum::body::Body;
-use axum::http::{HeaderMap, Method, Request, StatusCode, header};
+use axum::http::{Method, Request, StatusCode, header};
+use common::*;
 use hands_off_api::app::router;
-use hands_off_api::detection::{DetectorProvider, StaticDetector};
-use hands_off_api::jobs::JobContext;
-use hands_off_api::state::AppState;
-use hands_off_api::storage::{FsBlobStore, SqliteStore};
+use hands_off_core::Error;
 use hands_off_core::job::JobEvent;
-use hands_off_core::{BBox, Config, Error};
 use hands_off_imaging::mask::Mask;
-use hands_off_vision::{Detection, Detector};
-use http_body_util::BodyExt;
-use image::{ImageFormat, RgbImage};
-use serde_json::Value;
-use tower::ServiceExt;
-
-const BOUNDARY: &str = "X-TEST-BOUNDARY";
-
-struct TestApp {
-    router: Router,
-    state: AppState,
-    _dir: tempfile::TempDir,
-}
-
-struct Response {
-    status: StatusCode,
-    headers: HeaderMap,
-    body: Vec<u8>,
-}
-
-impl Response {
-    fn json(&self) -> Value {
-        serde_json::from_slice(&self.body).expect("response body is JSON")
-    }
-}
-
-async fn app_with(configure: impl FnOnce(&mut Config)) -> TestApp {
-    let dir = tempfile::tempdir().unwrap();
-    let mut config = Config::from_lookup(|_| None).unwrap();
-    configure(&mut config);
-    let blobs = FsBlobStore::new(dir.path()).await.unwrap();
-    let store = SqliteStore::in_memory().await.unwrap();
-    let state = AppState::new(config, Arc::new(blobs), Arc::new(store));
-    TestApp {
-        router: router(state.clone()),
-        state,
-        _dir: dir,
-    }
-}
-
-async fn app() -> TestApp {
-    app_with(|_| {}).await
-}
-
-async fn send(app: &TestApp, request: Request<Body>) -> Response {
-    let response = app.router.clone().oneshot(request).await.unwrap();
-    let status = response.status();
-    let headers = response.headers().clone();
-    let body = response
-        .into_body()
-        .collect()
-        .await
-        .unwrap()
-        .to_bytes()
-        .to_vec();
-    Response {
-        status,
-        headers,
-        body,
-    }
-}
-
-async fn get(app: &TestApp, path: &str) -> Response {
-    send(app, Request::get(path).body(Body::empty()).unwrap()).await
-}
-
-fn png(width: u32, height: u32) -> Vec<u8> {
-    encode(width, height, ImageFormat::Png)
-}
-
-fn encode(width: u32, height: u32, format: ImageFormat) -> Vec<u8> {
-    let mut out = Cursor::new(Vec::new());
-    RgbImage::from_fn(width, height, |x, y| {
-        image::Rgb([(x % 251) as u8, (y % 241) as u8, 7])
-    })
-    .write_to(&mut out, format)
-    .unwrap();
-    out.into_inner()
-}
-
-fn multipart_request(field: &str, bytes: &[u8]) -> Request<Body> {
-    let mut body = Vec::new();
-    body.extend_from_slice(
-        format!(
-            "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"x\"\r\n\
-             Content-Type: application/octet-stream\r\n\r\n"
-        )
-        .as_bytes(),
-    );
-    body.extend_from_slice(bytes);
-    body.extend_from_slice(format!("\r\n--{BOUNDARY}--\r\n").as_bytes());
-    Request::post("/api/v1/images")
-        .header(
-            header::CONTENT_TYPE,
-            format!("multipart/form-data; boundary={BOUNDARY}"),
-        )
-        .body(Body::from(body))
-        .unwrap()
-}
-
-async fn upload(app: &TestApp, bytes: &[u8]) -> Response {
-    send(app, multipart_request("file", bytes)).await
-}
+use image::ImageFormat;
 
 #[tokio::test]
 async fn health_reports_ok_and_sets_a_request_id() {
@@ -375,76 +269,6 @@ async fn jobs_are_not_leaked_between_apps() {
         get(&second, &format!("/api/v1/jobs/{id}")).await.status,
         StatusCode::NOT_FOUND
     );
-}
-
-/// Reports one fixed object and counts how often it was asked to detect.
-struct FakeDetector {
-    calls: Arc<AtomicUsize>,
-}
-
-impl Detector for FakeDetector {
-    fn detect(&self, image: &image::DynamicImage) -> hands_off_core::Result<Vec<Detection>> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        let (w, h) = (image.width().min(64), image.height().min(64));
-        let data = (0..h)
-            .flat_map(|y| {
-                (0..w).map(move |x| x >= w / 4 && x < w * 3 / 4 && y >= h / 4 && y < h * 3 / 4)
-            })
-            .collect();
-        Ok(vec![Detection {
-            class_id: 63,
-            label: "couch",
-            score: 0.93,
-            bbox: BBox::new(0.25, 0.25, 0.5, 0.5).unwrap(),
-            mask: Mask::new(w, h, data).unwrap(),
-        }])
-    }
-}
-
-struct MissingModel;
-
-#[async_trait]
-impl DetectorProvider for MissingModel {
-    async fn detector(&self, _context: &JobContext) -> hands_off_core::Result<Arc<dyn Detector>> {
-        Err(Error::Unavailable(
-            "model is not installed: run `just models`".into(),
-        ))
-    }
-}
-
-async fn app_with_detector() -> (TestApp, Arc<AtomicUsize>) {
-    let calls = Arc::new(AtomicUsize::new(0));
-    let mut app = app().await;
-    app.state = app
-        .state
-        .with_detectors(Arc::new(StaticDetector(Arc::new(FakeDetector {
-            calls: Arc::clone(&calls),
-        }))));
-    app.router = router(app.state.clone());
-    (app, calls)
-}
-
-async fn uploaded_id(app: &TestApp) -> String {
-    upload(app, &png(120, 80)).await.json()["id"]
-        .as_str()
-        .unwrap()
-        .to_owned()
-}
-
-async fn analyze(app: &TestApp, id: &str) -> (StatusCode, Vec<JobEvent>) {
-    let response = send(
-        app,
-        Request::post(format!("/api/v1/images/{id}/analyze"))
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    if response.status != StatusCode::ACCEPTED {
-        return (response.status, Vec::new());
-    }
-    let job: hands_off_core::JobId = response.json()["job_id"].as_str().unwrap().parse().unwrap();
-    let events = futures::StreamExt::collect(app.state.jobs.events(job).await.unwrap()).await;
-    (response.status, events)
 }
 
 #[tokio::test]

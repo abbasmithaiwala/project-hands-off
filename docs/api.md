@@ -44,6 +44,26 @@ CI runs the same command and fails if the committed files differ.
 | `GET /images/{id}/objects` | Detected objects with labels, boxes, scores and outline polygons. `404` until analysed. |
 | `GET /images/{id}/objects/{object_id}/mask` | The object's mask as a grayscale PNG. |
 
+## Objects (AI-assisted controls)
+
+Both routes call a model the first time and are cached afterwards. See [models.md](models.md).
+
+| Route | Purpose |
+|---|---|
+| `POST /images/{id}/objects/{object_id}/properties` | The properties a user can edit on this object, each with the control type that suits it. |
+| `POST /images/{id}/objects/{object_id}/widget` | Body `{ "property": "<key>" }`. The control's geometry in image coordinates, validated and snapped onto the object. |
+
+If no API key is configured they return `503` with code `unavailable` and a message asking for one.
+
+## Settings
+
+| Route | Purpose |
+|---|---|
+| `GET /settings` | Whether AI is configured (and where the key comes from) and the model chosen for each stage. The key itself is never returned. |
+| `PUT /settings/openrouter-key` | Body `{ "key": "..." }`. Stored on the server. |
+| `DELETE /settings/openrouter-key` | Remove the stored key. A key set through the environment is unaffected. |
+| `PUT /settings/models` | Choose the model for each stage. |
+
 ## Jobs and event streams
 
 Long-running work (analysis, generation) runs as a background job.
@@ -70,6 +90,7 @@ Everything has a default. Set variables in the environment, in `.env`, or in `lo
 | `HANDS_OFF_MAX_DIMENSION` | `8192` | Maximum image width or height |
 | `HANDS_OFF_RFDETR_SEG_URL` | none | Where to download the RF-DETR-Seg ONNX model if it is not in `HANDS_OFF_MODEL_DIR` |
 | `HANDS_OFF_RFDETR_SEG_SHA256` | none | Expected SHA-256 of that download |
+| `HANDS_OFF_DEMO_AI` | off | `1` answers AI requests from built-in rules, so the app works without an API key or credits |
 | `HANDS_OFF_JOB_TIMEOUT_SECS` | `180` | Maximum job run time |
 | `HANDS_OFF_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed browser origins |
 | `RUST_LOG` | `info,hands_off_api=debug` | Log verbosity |

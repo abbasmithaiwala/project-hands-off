@@ -3,13 +3,13 @@
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderName, HeaderValue, Method, header};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 
-use crate::routes::{health, images, jobs};
+use crate::routes::{health, images, jobs, objects, settings};
 use crate::state::AppState;
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
@@ -36,6 +36,20 @@ pub fn router(state: AppState) -> Router {
             "/images/{id}/objects/{object_id}/mask",
             get(images::get_mask),
         )
+        .route(
+            "/images/{id}/objects/{object_id}/properties",
+            post(objects::properties),
+        )
+        .route(
+            "/images/{id}/objects/{object_id}/widget",
+            post(objects::widget),
+        )
+        .route("/settings", get(settings::get_settings))
+        .route(
+            "/settings/openrouter-key",
+            put(settings::set_key).delete(settings::clear_key),
+        )
+        .route("/settings/models", put(settings::set_models))
         .route("/jobs/{id}", get(jobs::get_job))
         .route("/jobs/{id}", delete(jobs::cancel_job))
         .route("/jobs/{id}/events", get(jobs::job_events));
@@ -68,7 +82,7 @@ fn cors_layer(origins: &[String]) -> CorsLayer {
     let origins: Vec<HeaderValue> = origins.iter().filter_map(|o| o.parse().ok()).collect();
     CorsLayer::new()
         .allow_origin(origins)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE])
         .expose_headers([REQUEST_ID])
 }

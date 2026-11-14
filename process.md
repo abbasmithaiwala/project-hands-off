@@ -97,14 +97,14 @@ Exit: golden images produce correct outlines in under the target latency; docume
 
 Goal: for a selected object, get valid properties and a widget plan from the standard typed API.
 
-- [ ] `llm`: `LlmProvider` trait and `OpenRouterProvider` (reqwest, streaming, structured outputs, retries with backoff, fallback model list, usage and cost capture, timeouts).
-- [ ] `MockProvider` with recorded responses, used by all tests and dev without credits.
-- [ ] Stage-to-model config with built-in defaults (`suggester`, `ui_planner`, `summariser`, `generator`).
-- [ ] `prompts/`: versioned templates plus schemas for suggester and planner, each documented with inputs and outputs.
-- [ ] Suggester: object crop + label in, validated `Property` list out. Lazy, cached by (image hash, object, prompt version).
-- [ ] Widget planner: crop + mask + chosen property in, validated widget geometry out. Validation clamps points into the mask; invalid output gets one retry with the error fed back, then a default widget per property type.
-- [ ] Endpoints: `.../objects/{oid}/properties`, `.../objects/{oid}/widget`.
-- [ ] Explicit API key flow: stored server-side, never logged, never returned; clear error when missing.
+- [x] `llm`: `LlmProvider` trait and `OpenRouterProvider` (reqwest, streaming, structured outputs, retries with backoff, fallback model list, usage and cost capture, timeouts).
+- [x] `MockProvider` with recorded responses, used by all tests and dev without credits.
+- [x] Stage-to-model config with built-in defaults (`suggester`, `ui_planner`, `summariser`, `generator`).
+- [x] `prompts/`: versioned templates plus schemas for suggester and planner, each documented with inputs and outputs.
+- [x] Suggester: object crop + label in, validated `Property` list out. Lazy, cached by (image hash, object, prompt version).
+- [x] Widget planner: crop + mask + chosen property in, validated widget geometry out. Validation clamps points into the mask; invalid output gets one retry with the error fed back, then a default widget per property type.
+- [x] Endpoints: `.../objects/{oid}/properties`, `.../objects/{oid}/widget`.
+- [x] Explicit API key flow: stored server-side, never logged, never returned; clear error when missing.
 
 Tests: schema validation and repair (table-driven and `proptest`), prompt snapshot tests (`insta`), provider retry and fallback behaviour via mock HTTP server, key redaction in logs.
 
@@ -241,3 +241,4 @@ Review these at the end of every phase.
 - 2026-11-14: Phase 1 done. Gate 1 passed: `google/gemini-3-pro-image` with a preview reference gave acceptable edits on 5/5 golden images ($0.14, ~18 s); text-only prompts and `gpt-5-image-mini` are not viable (ADR 0003). Gate 2 passed: RF-DETR-Seg Medium exports to ONNX and runs at ~0.35 s on CPU; SAM dropped from the MVP critical path (ADR 0004). Rust `ort` confirmation moves to Phase 3.
 - 2026-11-14: Phase 2 done. Typed API with upload, images, jobs (SSE, cancel, timeout), SQLite + filesystem storage, OpenAPI to TypeScript client via `just gen-api`. 38 Rust API tests, 30 core, 8 imaging, 4 web. Smoke-tested the real server with curl. TypeScript pinned to 5.x (ADR 0002). `RUSTSEC-2026-0459` (SQLite WAL flaw in the `libsqlite3-sys` that `sqlx` 0.9.0 pins) is ignored in `deny.toml` with a documented reason; remove once `sqlx` allows `libsqlite3-sys` 0.39 or newer.
 - 2026-11-14: Phase 3 done (with SAM click-to-segment and YOLO11 deferred). Rust `ort` + RF-DETR-Seg reproduces the Python reference (IoU >= 0.98), ~260-290 ms per image in release. Model manager with checksums and download, EXIF orientation, mask cleanup and outlines, `/analyze` job streaming `object_found` events, cached results. Release builds need LTO off (see ADR 0004). Golden tests skip when the model is not installed.
+- 2026-11-14: Phase 4 done. `llm` crate (OpenRouter client with retry, fallback and cost capture; mock and demo providers; strict JSON schemas), versioned prompts, suggester and widget planner with validation, one repair retry and deterministic defaults, settings API (write-only key, model choice), `HANDS_OFF_DEMO_AI` mode. Benchmarked six models including `typesafe/jev-router` (ADR 0005). Fixed a real schema bug and a real placement-quality problem found by live testing. Note: `jev` turned out to be TypeSafe's Jev Router model on OpenRouter, not the typed-decisions API assumed earlier; it is supported as an optional model choice and the Decisions API phase below needs revisiting.

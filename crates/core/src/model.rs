@@ -99,6 +99,18 @@ pub enum WidgetKind {
     MultiHandle,
 }
 
+impl WidgetKind {
+    /// The snake_case name used in JSON and prompts.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Slider => "slider",
+            Self::ControlPoints => "control_points",
+            Self::MultiHandle => "multi_handle",
+        }
+    }
+}
+
 /// An editable property of an object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct Property {
@@ -108,6 +120,69 @@ pub struct Property {
     pub label: String,
     /// Control used to edit it.
     pub widget: WidgetKind,
+}
+
+/// The editable properties suggested for one object.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct PropertyList {
+    /// Properties, most useful first.
+    pub properties: Vec<Property>,
+}
+
+/// Which model each AI stage uses. Any OpenRouter model id is allowed, including
+/// `typesafe/jev-router`, which picks a model and reasoning effort per request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct ModelSettings {
+    /// Suggests editable properties for an object.
+    pub suggester: String,
+    /// Plans where a control sits on the canvas.
+    pub ui_planner: String,
+    /// Summarises edits into instructions and change logs.
+    pub summariser: String,
+    /// Generates the edited image.
+    pub generator: String,
+    /// Tried when the stage's own model fails or is unavailable.
+    pub fallback: String,
+}
+
+impl Default for ModelSettings {
+    fn default() -> Self {
+        Self {
+            suggester: "google/gemini-3.1-flash-lite".into(),
+            ui_planner: "google/gemini-3.1-flash-lite".into(),
+            summariser: "google/gemini-3.1-flash-lite".into(),
+            generator: "google/gemini-3-pro-image".into(),
+            fallback: "anthropic/claude-haiku-5.5".into(),
+        }
+    }
+}
+
+impl ModelSettings {
+    /// Check every model id has a plausible shape.
+    ///
+    /// # Errors
+    /// [`Error::Validation`] naming the offending field.
+    pub fn validate(&self) -> Result<(), crate::Error> {
+        for (field, value) in [
+            ("suggester", &self.suggester),
+            ("ui_planner", &self.ui_planner),
+            ("summariser", &self.summariser),
+            ("generator", &self.generator),
+            ("fallback", &self.fallback),
+        ] {
+            let valid = !value.is_empty()
+                && value.len() <= 100
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.:/~".contains(c));
+            if !valid {
+                return Err(crate::Error::Validation(format!(
+                    "{field}: not a valid model id"
+                )));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A line segment along which a slider moves.
@@ -243,6 +318,27 @@ mod tests {
         };
         let back: Edit = serde_json::from_str(&serde_json::to_string(&edit).unwrap()).unwrap();
         assert_eq!(back, edit);
+    }
+
+    #[test]
+    fn default_model_settings_are_valid() {
+        assert!(ModelSettings::default().validate().is_ok());
+    }
+
+    #[test]
+    fn model_settings_reject_bad_ids() {
+        for bad in ["", "has space", "semi;colon", &"x".repeat(101)] {
+            let settings = ModelSettings {
+                suggester: bad.into(),
+                ..ModelSettings::default()
+            };
+            assert!(settings.validate().is_err(), "{bad:?}");
+        }
+        let jev = ModelSettings {
+            suggester: "typesafe/jev-router".into(),
+            ..ModelSettings::default()
+        };
+        assert!(jev.validate().is_ok());
     }
 
     #[test]

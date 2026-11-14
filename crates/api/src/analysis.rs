@@ -35,6 +35,23 @@ pub async fn cached_objects(state: &AppState, id: ImageId) -> Result<Option<Vec<
     }
 }
 
+/// Find one analysed object.
+///
+/// # Errors
+/// [`Error::NotFound`] if the image has not been analysed or has no such object.
+pub async fn find_object(
+    state: &AppState,
+    id: ImageId,
+    object: ObjectId,
+) -> Result<DetectedObject> {
+    cached_objects(state, id)
+        .await?
+        .ok_or(Error::NotFound("analysis"))?
+        .into_iter()
+        .find(|o| o.id == object)
+        .ok_or(Error::NotFound("object"))
+}
+
 /// Analyse an image, streaming each object to the job's subscribers as it is found.
 ///
 /// # Errors
