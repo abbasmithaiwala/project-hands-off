@@ -23,7 +23,7 @@ The workflow refuses to publish when the tag does not match the version in `Carg
   `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 - **Detection model**: `rfdetr-seg-medium.onnx` and its checksum, exported with `scripts/export_models.py`, as release assets.
   The container image downloads it from there on first start.
-- **Container image** for `linux/amd64` and `linux/arm64` on `ghcr.io/<owner>/hands-off`, tagged `X.Y.Z`, `X.Y` and `latest`.
+- **Container image** for `linux/amd64` and `linux/arm64` on `ghcr.io/abbasmithaiwala/project-hands-off`, tagged `X.Y.Z`, `X.Y` and `latest`.
 - **Checksums**: `SHA256SUMS` for every asset, signed with [cosign](https://docs.sigstore.dev/) keyless signing
   (`SHA256SUMS.sig` and `SHA256SUMS.pem`); the container image is signed the same way.
 - **Release notes**, taken from the matching section of `CHANGELOG.md`.
@@ -34,9 +34,9 @@ The workflow refuses to publish when the tag does not match the version in `Carg
 sha256sum -c SHA256SUMS --ignore-missing
 cosign verify-blob SHA256SUMS \
   --signature SHA256SUMS.sig --certificate SHA256SUMS.pem \
-  --certificate-identity-regexp 'https://github.com/<owner>/hands-off/.github/workflows/release.yml@.*' \
+  --certificate-identity-regexp 'https://github.com/abbasmithaiwala/project-hands-off/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-cosign verify ghcr.io/<owner>/hands-off:X.Y.Z \
-  --certificate-identity-regexp 'https://github.com/<owner>/hands-off/.github/workflows/release.yml@.*' \
+cosign verify ghcr.io/abbasmithaiwala/project-hands-off:X.Y.Z \
+  --certificate-identity-regexp 'https://github.com/abbasmithaiwala/project-hands-off/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

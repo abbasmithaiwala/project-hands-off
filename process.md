@@ -198,12 +198,12 @@ Exit: toggling styles changes only the route set, with no duplicated business lo
 
 ## Phase 10: Packaging and release (about 1 week)
 
-- [ ] Multi-stage Dockerfile (small final image, non-root, model download at first run) and `docker compose` for one-command start.
-- [ ] Release automation: versioning, changelog, binaries for macOS/Linux, container image published to a registry, signed checksums.
-- [ ] `README.md` with demo GIF, quick start, configuration reference; `docs/` complete: architecture, API, models and licences, adding a widget/property/detector/provider, deployment, contributing; `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and PR templates.
-- [ ] Third-party licence audit and `THIRD_PARTY_NOTICES`; confirm weights are downloaded, not bundled.
-- [ ] Clean-machine test: follow the README from scratch on a fresh environment and fix every stumble.
-- [ ] Tag `v0.1.0`.
+- [x] Multi-stage Dockerfile (small final image, non-root, model download at first run) and `docker compose` for one-command start.
+- [x] Release automation: versioning, changelog, binaries for macOS/Linux, container image published to a registry, signed checksums.
+- [x] `README.md` with demo GIF, quick start, configuration reference; `docs/` complete: architecture, API, models and licences, adding a widget/property/detector/provider, deployment, contributing; `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and PR templates.
+- [x] Third-party licence audit and `THIRD_PARTY_NOTICES`; confirm weights are downloaded, not bundled.
+- [x] Clean-machine test: follow the README from scratch on a fresh environment and fix every stumble.
+- [x] Tag `v0.1.0`.
 
 Exit: a stranger can run it with one command and make their first edit in under five minutes.
 
@@ -252,3 +252,4 @@ Review these at the end of every phase.
 - 2026-11-14: All apply-time prompts moved to v2 with an understand-the-object, look-real instruction (summariser, with-preview, without-preview, with-outline). No live calls; tests use mocks.
 - 2026-11-14: Faded 'after' colours: traced to the image model (lite) returning a paler object; the compare view and the images we send are not faded. Added object colour restoration in compositing plus a keep-colours line in the generation prompts. No live calls.
 - 2026-11-14: Tried guide marks for every control (slider line, handle arrows) and went back: sliders and handles use the warped preview and its live stretch again; reshape keeps the drawn outline. Text stages default to `deepseek/deepseek-v4.1-flash` (ADR 0011).
+- 2026-11-14: Phase 10 done. The server now serves the built web app (`HANDS_OFF_WEB_DIR`, SPA fallback, immutable asset caching, JSON 404s for the API), a dependency-free `healthcheck` subcommand, a multi-stage Dockerfile (Debian 13: the prebuilt ONNX Runtime needs GCC 13+'s C++ runtime; non-root; 141 MB; no weights) and `docker-compose.yml`, a tag-driven release workflow (binaries for 4 targets, the exported model, a multi-arch image, cosign-signed `SHA256SUMS`, notes from `CHANGELOG.md`), `THIRD_PARTY_NOTICES.md` generated and checked in CI (all permissive licences), the README, architecture/extending/deployment/releasing docs, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY and templates. Clean-machine check done in a container: the image started as an unprivileged user, served the app, downloaded and verified the model on first use, analysed a photo, and reported healthy. **Not done:** the release workflow itself has not run (it needs a pushed tag on GitHub), and the demo GIF is a recording against the mocked API, not a live model. `1.mp4` was removed from the repo and from all history; the remote still needs a force-push to match.

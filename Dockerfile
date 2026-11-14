@@ -15,7 +15,8 @@ COPY web/ ./
 RUN npm run build
 
 # --- server ----------------------------------------------------------------------------------
-FROM rust:${RUST_VERSION}-slim-bookworm AS server
+# Debian 13: the prebuilt ONNX Runtime needs the C++ runtime of GCC 13 or newer to link and run.
+FROM rust:${RUST_VERSION}-slim-trixie AS server
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -29,7 +30,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cp target/release/hands-off /hands-off
 
 # --- runtime ---------------------------------------------------------------------------------
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libstdc++6 \
     && rm -rf /var/lib/apt/lists/* \

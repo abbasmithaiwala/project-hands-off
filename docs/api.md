@@ -97,10 +97,11 @@ Everything has a default. Set variables in the environment, in `.env`, or in `lo
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `OPENROUTER_API_KEY` | none | Needed from Phase 4 on, to call hosted models |
+| `OPENROUTER_API_KEY` | none | Needed to call hosted models; can also be pasted into the app |
 | `HANDS_OFF_BIND` | `127.0.0.1:8080` | Listen address |
 | `HANDS_OFF_DATA_DIR` | `data` | Database and image blobs |
 | `HANDS_OFF_MODEL_DIR` | `models` | Downloaded model weights |
+| `HANDS_OFF_WEB_DIR` | none | Directory holding the built web app; when set, the server serves it next to the API (the Docker image sets it) |
 | `HANDS_OFF_MAX_UPLOAD_MB` | `25` | Maximum upload size |
 | `HANDS_OFF_MAX_DIMENSION` | `8192` | Maximum image width or height |
 | `HANDS_OFF_RFDETR_SEG_URL` | none | Where to download the RF-DETR-Seg ONNX model if it is not in `HANDS_OFF_MODEL_DIR` |
