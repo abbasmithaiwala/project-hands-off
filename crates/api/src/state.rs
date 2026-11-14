@@ -6,6 +6,7 @@ use hands_off_core::storage::{BlobStore, ProjectStore};
 use hands_off_core::{Config, Error, Result};
 use tokio::fs;
 
+use crate::detection::{DetectorProvider, LazyRfDetr};
 use crate::jobs::JobManager;
 use crate::storage::{FsBlobStore, SqliteStore};
 
@@ -20,6 +21,8 @@ pub struct AppState {
     pub store: Arc<dyn ProjectStore>,
     /// Background jobs.
     pub jobs: JobManager,
+    /// Source of the object detector.
+    pub detectors: Arc<dyn DetectorProvider>,
 }
 
 impl AppState {
@@ -27,12 +30,21 @@ impl AppState {
     #[must_use]
     pub fn new(config: Config, blobs: Arc<dyn BlobStore>, store: Arc<dyn ProjectStore>) -> Self {
         let jobs = JobManager::new(Arc::clone(&store), config.job_timeout);
+        let detectors = Arc::new(LazyRfDetr::from_config(&config));
         Self {
             config: Arc::new(config),
             blobs,
             store,
             jobs,
+            detectors,
         }
+    }
+
+    /// Replace the detector source (used by tests and custom setups).
+    #[must_use]
+    pub fn with_detectors(mut self, detectors: Arc<dyn DetectorProvider>) -> Self {
+        self.detectors = detectors;
+        self
     }
 
     /// Open the storage described by `config`, creating directories as needed.

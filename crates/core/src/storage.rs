@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::ErrorCode;
 use crate::error::{Error, Result};
-use crate::ids::{ContentHash, ImageId, JobId};
+use crate::ids::{ContentHash, ImageId, JobId, ObjectId};
 use crate::job::{JobRecord, JobStatus};
 use crate::model::ImageRecord;
 
@@ -43,6 +43,18 @@ impl BlobKey {
     #[must_use]
     pub fn thumbnail(id: ImageId) -> Self {
         Self(format!("images/{id}/thumbnail.jpg"))
+    }
+
+    /// Key for an image's cached analysis (the list of detected objects).
+    #[must_use]
+    pub fn analysis(id: ImageId) -> Self {
+        Self(format!("images/{id}/analysis.json"))
+    }
+
+    /// Key for one detected object's mask PNG.
+    #[must_use]
+    pub fn mask(id: ImageId, object: ObjectId) -> Self {
+        Self(format!("images/{id}/masks/{}.png", object.0))
     }
 
     /// The key as a string slice.
@@ -134,5 +146,7 @@ mod tests {
         let id = ImageId::new();
         assert!(BlobKey::new(BlobKey::original(id).as_str()).is_ok());
         assert!(BlobKey::new(BlobKey::thumbnail(id).as_str()).is_ok());
+        assert!(BlobKey::new(BlobKey::analysis(id).as_str()).is_ok());
+        assert!(BlobKey::new(BlobKey::mask(id, ObjectId(3)).as_str()).is_ok());
     }
 }

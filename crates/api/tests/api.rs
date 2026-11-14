@@ -3,16 +3,22 @@
 
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use async_trait::async_trait;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use hands_off_api::app::router;
+use hands_off_api::detection::{DetectorProvider, StaticDetector};
+use hands_off_api::jobs::JobContext;
 use hands_off_api::state::AppState;
 use hands_off_api::storage::{FsBlobStore, SqliteStore};
-use hands_off_core::Config;
 use hands_off_core::job::JobEvent;
+use hands_off_core::{BBox, Config, Error};
+use hands_off_imaging::mask::Mask;
+use hands_off_vision::{Detection, Detector};
 use http_body_util::BodyExt;
 use image::{ImageFormat, RgbImage};
 use serde_json::Value;
@@ -368,5 +374,179 @@ async fn jobs_are_not_leaked_between_apps() {
     assert_eq!(
         get(&second, &format!("/api/v1/jobs/{id}")).await.status,
         StatusCode::NOT_FOUND
+    );
+}
+
+/// Reports one fixed object and counts how often it was asked to detect.
+struct FakeDetector {
+    calls: Arc<AtomicUsize>,
+}
+
+impl Detector for FakeDetector {
+    fn detect(&self, image: &image::DynamicImage) -> hands_off_core::Result<Vec<Detection>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let (w, h) = (image.width().min(64), image.height().min(64));
+        let data = (0..h)
+            .flat_map(|y| {
+                (0..w).map(move |x| x >= w / 4 && x < w * 3 / 4 && y >= h / 4 && y < h * 3 / 4)
+            })
+            .collect();
+        Ok(vec![Detection {
+            class_id: 63,
+            label: "couch",
+            score: 0.93,
+            bbox: BBox::new(0.25, 0.25, 0.5, 0.5).unwrap(),
+            mask: Mask::new(w, h, data).unwrap(),
+        }])
+    }
+}
+
+struct MissingModel;
+
+#[async_trait]
+impl DetectorProvider for MissingModel {
+    async fn detector(&self, _context: &JobContext) -> hands_off_core::Result<Arc<dyn Detector>> {
+        Err(Error::Unavailable(
+            "model is not installed: run `just models`".into(),
+        ))
+    }
+}
+
+async fn app_with_detector() -> (TestApp, Arc<AtomicUsize>) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut app = app().await;
+    app.state = app
+        .state
+        .with_detectors(Arc::new(StaticDetector(Arc::new(FakeDetector {
+            calls: Arc::clone(&calls),
+        }))));
+    app.router = router(app.state.clone());
+    (app, calls)
+}
+
+async fn uploaded_id(app: &TestApp) -> String {
+    upload(app, &png(120, 80)).await.json()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+async fn analyze(app: &TestApp, id: &str) -> (StatusCode, Vec<JobEvent>) {
+    let response = send(
+        app,
+        Request::post(format!("/api/v1/images/{id}/analyze"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    if response.status != StatusCode::ACCEPTED {
+        return (response.status, Vec::new());
+    }
+    let job: hands_off_core::JobId = response.json()["job_id"].as_str().unwrap().parse().unwrap();
+    let events = futures::StreamExt::collect(app.state.jobs.events(job).await.unwrap()).await;
+    (response.status, events)
+}
+
+#[tokio::test]
+async fn analysis_streams_objects_then_serves_them_and_their_masks() {
+    let (app, _) = app_with_detector().await;
+    let id = uploaded_id(&app).await;
+
+    let (status, events) = analyze(&app, &id).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let found: Vec<_> = events
+        .iter()
+        .filter(|e| matches!(e, JobEvent::ObjectFound { .. }))
+        .collect();
+    assert_eq!(found.len(), 1);
+    assert!(matches!(events.last(), Some(JobEvent::Completed { .. })));
+
+    let objects = get(&app, &format!("/api/v1/images/{id}/objects"))
+        .await
+        .json();
+    assert_eq!(objects[0]["label"], "couch");
+    assert_eq!(objects[0]["id"], 0);
+    assert!(objects[0]["outline"].as_array().unwrap().len() >= 3);
+
+    let mask = get(&app, &format!("/api/v1/images/{id}/objects/0/mask")).await;
+    assert_eq!(mask.status, StatusCode::OK);
+    assert_eq!(mask.headers[header::CONTENT_TYPE], "image/png");
+    assert!(Mask::from_png(&mask.body).unwrap().area() > 0);
+}
+
+#[tokio::test]
+async fn analysing_twice_uses_the_cache() {
+    let (app, calls) = app_with_detector().await;
+    let id = uploaded_id(&app).await;
+
+    analyze(&app, &id).await;
+    let (_, second) = analyze(&app, &id).await;
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(
+        second
+            .iter()
+            .any(|e| matches!(e, JobEvent::ObjectFound { .. }))
+    );
+    assert!(
+        second
+            .iter()
+            .any(|e| matches!(e, JobEvent::Progress { stage, .. } if stage == "cached"))
+    );
+}
+
+#[tokio::test]
+async fn a_missing_model_fails_the_job_with_an_actionable_message() {
+    let mut app = app().await;
+    app.state = app.state.with_detectors(Arc::new(MissingModel));
+    app.router = router(app.state.clone());
+    let id = uploaded_id(&app).await;
+
+    let (_, events) = analyze(&app, &id).await;
+
+    match events.last() {
+        Some(JobEvent::Failed { code, message }) => {
+            assert_eq!(*code, hands_off_core::ErrorCode::Unavailable);
+            assert!(message.contains("just models"));
+        }
+        other => panic!("expected a failed event, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn analysis_endpoints_reject_unknown_images_and_objects() {
+    let (app, _) = app_with_detector().await;
+    let missing = hands_off_core::ImageId::new();
+    assert_eq!(
+        analyze(&app, &missing.to_string()).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get(&app, &format!("/api/v1/images/{missing}/objects"))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+
+    let id = uploaded_id(&app).await;
+    let before = get(&app, &format!("/api/v1/images/{id}/objects")).await;
+    assert_eq!(before.status, StatusCode::NOT_FOUND);
+    assert_eq!(before.json()["code"], "not_found");
+
+    analyze(&app, &id).await;
+    assert_eq!(
+        get(&app, &format!("/api/v1/images/{id}/objects/9/mask"))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn unavailable_errors_map_to_503() {
+    let response = hands_off_api::error::ApiError(Error::Unavailable("x".into()));
+    assert_eq!(
+        axum::response::IntoResponse::into_response(response).status(),
+        StatusCode::SERVICE_UNAVAILABLE
     );
 }

@@ -30,6 +30,12 @@ pub fn router(state: AppState) -> Router {
         .route("/images/{id}", get(images::get_image))
         .route("/images/{id}/original", get(images::get_original))
         .route("/images/{id}/thumbnail", get(images::get_thumbnail))
+        .route("/images/{id}/analyze", post(images::analyze))
+        .route("/images/{id}/objects", get(images::list_objects))
+        .route(
+            "/images/{id}/objects/{object_id}/mask",
+            get(images::get_mask),
+        )
         .route("/jobs/{id}", get(jobs::get_job))
         .route("/jobs/{id}", delete(jobs::cancel_job))
         .route("/jobs/{id}/events", get(jobs::job_events));

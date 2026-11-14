@@ -79,13 +79,13 @@ Exit: upload works end to end through the generated client; `docs/api.md` genera
 
 Goal: upload an image, get object outlines.
 
-- [ ] `vision`: `Detector` trait; `RfDetrDetector` via `ort` (pre/post-processing, class mapping, score thresholds, NMS only if the model needs it).
-- [ ] `Segmenter` trait; SAM encoder/decoder implementation: box-prompted and point-prompted masks, mask cleanup (largest component, hole fill, simplification to contour polygons).
-- [ ] Model manager: first-run download with checksum verification, cache directory, clear progress, execution-provider selection (CoreML/CUDA/CPU) with automatic fallback.
-- [ ] `imaging`: decode, EXIF orientation, resize (`fast_image_resize`), mask morphology, mask to PNG/RLE, contour extraction.
-- [ ] `POST /api/v1/images/{id}/analyze` streaming objects over SSE as found; results cached by image hash.
-- [ ] Click-to-segment endpoint (point prompt) for objects the detector missed.
-- [ ] Optional `YoloDetector` behind a Cargo feature and the same trait.
+- [x] `vision`: `Detector` trait; `RfDetrSeg` via `ort` (pre/post-processing, class mapping, score thresholds, NMS only if the model needs it).
+- [ ] (Deferred, see ADR 0004) `Segmenter` trait; SAM encoder/decoder implementation: box-prompted and point-prompted masks, mask cleanup (largest component, hole fill, simplification to contour polygons).
+- [x] Model manager: first-run download with checksum verification, cache directory, clear progress, execution-provider selection (CoreML/CUDA/CPU) with automatic fallback.
+- [x] `imaging`: decode, EXIF orientation, resize (`fast_image_resize`), mask morphology, mask to PNG/RLE, contour extraction.
+- [x] `POST /api/v1/images/{id}/analyze` streaming objects over SSE as found; results cached by image hash.
+- [ ] (Deferred with SAM) Click-to-segment endpoint (point prompt) for objects the detector missed.
+- [ ] (Deferred) Optional `YoloDetector` behind a Cargo feature and the same trait.
 
 Tests: `proptest` on mask and contour invariants, golden-image detection tests with tolerance, checksum failure handling, fallback of execution providers.
 
@@ -240,3 +240,4 @@ Review these at the end of every phase.
 - 2026-11-14: Phase 0 done. `just check` green. Switched frontend to npm and oxlint (ADR 0002): pnpm shim broken locally. `gen-api` is a stub until Phase 2.
 - 2026-11-14: Phase 1 done. Gate 1 passed: `google/gemini-3-pro-image` with a preview reference gave acceptable edits on 5/5 golden images ($0.14, ~18 s); text-only prompts and `gpt-5-image-mini` are not viable (ADR 0003). Gate 2 passed: RF-DETR-Seg Medium exports to ONNX and runs at ~0.35 s on CPU; SAM dropped from the MVP critical path (ADR 0004). Rust `ort` confirmation moves to Phase 3.
 - 2026-11-14: Phase 2 done. Typed API with upload, images, jobs (SSE, cancel, timeout), SQLite + filesystem storage, OpenAPI to TypeScript client via `just gen-api`. 38 Rust API tests, 30 core, 8 imaging, 4 web. Smoke-tested the real server with curl. TypeScript pinned to 5.x (ADR 0002). `RUSTSEC-2026-0459` (SQLite WAL flaw in the `libsqlite3-sys` that `sqlx` 0.9.0 pins) is ignored in `deny.toml` with a documented reason; remove once `sqlx` allows `libsqlite3-sys` 0.39 or newer.
+- 2026-11-14: Phase 3 done (with SAM click-to-segment and YOLO11 deferred). Rust `ort` + RF-DETR-Seg reproduces the Python reference (IoU >= 0.98), ~260-290 ms per image in release. Model manager with checksums and download, EXIF orientation, mask cleanup and outlines, `/analyze` job streaming `object_found` events, cached results. Release builds need LTO off (see ADR 0004). Golden tests skip when the model is not installed.

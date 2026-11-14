@@ -43,6 +43,10 @@ pub struct Config {
     pub data_dir: PathBuf,
     /// Directory holding downloaded model weights.
     pub model_dir: PathBuf,
+    /// Where to download the RF-DETR-Seg ONNX model from, if hosted.
+    pub rfdetr_seg_url: Option<String>,
+    /// Expected SHA-256 of the RF-DETR-Seg model, if known.
+    pub rfdetr_seg_sha256: Option<String>,
     /// OpenRouter API key, if provided.
     pub openrouter_api_key: Option<SecretString>,
     /// Upload limits.
@@ -118,6 +122,8 @@ impl Config {
                 .map_or_else(|| PathBuf::from("data"), PathBuf::from),
             model_dir: get("HANDS_OFF_MODEL_DIR")
                 .map_or_else(|| PathBuf::from("models"), PathBuf::from),
+            rfdetr_seg_url: get("HANDS_OFF_RFDETR_SEG_URL"),
+            rfdetr_seg_sha256: get("HANDS_OFF_RFDETR_SEG_SHA256"),
             openrouter_api_key: get("OPENROUTER_API_KEY").map(SecretString::from),
             limits: Limits {
                 max_upload_bytes: max_upload_mb * BYTES_PER_MB,
@@ -170,6 +176,7 @@ mod tests {
         assert_eq!(cfg.bind.to_string(), DEFAULT_BIND);
         assert_eq!(cfg.limits, Limits::default());
         assert!(cfg.openrouter_api_key.is_none());
+        assert!(cfg.rfdetr_seg_url.is_none());
         assert_eq!(cfg.cors_origins.len(), 2);
     }
 

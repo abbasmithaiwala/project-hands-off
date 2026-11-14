@@ -29,3 +29,12 @@ SAM 2.1 tiny in PyTorch took about 800 ms per box prompt; an ONNX export was not
 - One model instead of two in the default path, so a simpler pipeline and fewer downloads.
 - Phase 3 must confirm the numbers through the Rust `ort` crate (they were measured with Python ONNX Runtime) and verify SAM ONNX export if click-to-segment is to ship.
 - Linux or CUDA users may see different performance; benchmark again when targeting them.
+
+## Addendum: confirmed in Rust (Phase 3)
+
+The Rust `ort` implementation reproduces the Python reference: box IoU of 0.98 or higher on every golden image. Release-build latency on the M4, after warm-up, is about 260-290 ms per image including preprocessing and mask cleanup. Two build notes:
+
+- `ort` 2.0.0-rc.15 is a release candidate; the version is pinned in `Cargo.toml`.
+- The release profile has LTO off: thin LTO drops `___isPlatformVersionAtLeast`, which ONNX Runtime's prebuilt macOS libraries need, and the link fails.
+
+SAM click-to-segment and the optional YOLO11 detector are deferred (they are outside the MVP path).

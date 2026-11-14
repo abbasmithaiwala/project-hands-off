@@ -83,6 +83,8 @@ pub struct DetectedObject {
     pub bbox: BBox,
     /// Detector confidence in `0.0..=1.0`.
     pub score: f32,
+    /// Simplified outline of the object's mask, as a closed polygon.
+    pub outline: Vec<NormalizedPoint>,
 }
 
 /// The kind of on-canvas control used to edit a property.

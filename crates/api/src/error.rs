@@ -46,6 +46,7 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::NotFound => StatusCode::NOT_FOUND,
         ErrorCode::Timeout => StatusCode::GATEWAY_TIMEOUT,
         ErrorCode::Cancelled => StatusCode::CONFLICT,
+        ErrorCode::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
@@ -82,6 +83,10 @@ mod tests {
         assert_eq!(status_for(ErrorCode::NotFound), StatusCode::NOT_FOUND);
         assert_eq!(status_for(ErrorCode::Timeout), StatusCode::GATEWAY_TIMEOUT);
         assert_eq!(status_for(ErrorCode::Cancelled), StatusCode::CONFLICT);
+        assert_eq!(
+            status_for(ErrorCode::Unavailable),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
         assert_eq!(
             status_for(ErrorCode::Internal),
             StatusCode::INTERNAL_SERVER_ERROR

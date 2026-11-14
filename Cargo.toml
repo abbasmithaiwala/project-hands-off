@@ -19,6 +19,14 @@ uuid = { version = "1.29.2", features = ["v4", "serde"] }
 utoipa = { version = "6.0.0", features = ["uuid", "chrono"] }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "serde"] }
 async-trait = "0.1.92"
+sha2 = "0.11.1"
+hex = "0.4.3"
+futures = "0.3.34"
+tracing = "0.1.44"
+tempfile = "3.27.0"
+tokio = "1.54.1"
+axum = "0.8.9"
+image = { version = "0.25.10", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -32,7 +40,9 @@ expect_used = "warn"
 panic = "warn"
 module_name_repetitions = "allow"
 
+# LTO is off because thin LTO drops `___isPlatformVersionAtLeast` from compiler_builtins,
+# which ONNX Runtime's prebuilt macOS libraries need, breaking the release link.
 [profile.release]
-lto = "thin"
+lto = "off"
 codegen-units = 1
 strip = true

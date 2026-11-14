@@ -7,6 +7,7 @@ use utoipa::ToSchema;
 
 use crate::error::ErrorCode;
 use crate::ids::JobId;
+use crate::model::DetectedObject;
 
 /// Lifecycle state of a job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, JsonSchema)]
@@ -88,6 +89,11 @@ pub enum JobEvent {
         /// The log line.
         line: String,
     },
+    /// An object was found during image analysis.
+    ObjectFound {
+        /// The detected object.
+        object: DetectedObject,
+    },
     /// The job finished successfully.
     Completed {
         /// Optional job-specific result payload.
@@ -157,6 +163,20 @@ mod tests {
             }
             .is_terminal()
         );
+    }
+
+    #[test]
+    fn object_events_carry_the_object() {
+        let object = DetectedObject {
+            id: crate::ObjectId(1),
+            label: "couch".into(),
+            bbox: crate::BBox::new(0.1, 0.1, 0.5, 0.5).unwrap(),
+            score: 0.9,
+            outline: vec![crate::NormalizedPoint::new(0.1, 0.1).unwrap()],
+        };
+        let json = serde_json::to_value(JobEvent::ObjectFound { object }).unwrap();
+        assert_eq!(json["type"], "object_found");
+        assert_eq!(json["object"]["label"], "couch");
     }
 
     #[test]

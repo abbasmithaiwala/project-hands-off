@@ -24,6 +24,9 @@ use crate::routes::{health, images, jobs};
         images::get_image,
         images::get_original,
         images::get_thumbnail,
+        images::analyze,
+        images::list_objects,
+        images::get_mask,
         jobs::get_job,
         jobs::cancel_job,
         jobs::job_events,
@@ -31,7 +34,7 @@ use crate::routes::{health, images, jobs};
     components(schemas(
         Axis, BBox, ContentHash, DetectedObject, Edit, EditChange, ErrorBody, ErrorCode,
         ImageFormat, ImageId, ImageRecord, JobEvent, JobId, JobRecord, JobStatus, NormalizedPoint,
-        ObjectId, Property, Widget, WidgetKind, images::UploadForm,
+        ObjectId, Property, Widget, WidgetKind, images::JobCreated, images::UploadForm,
     )),
     tags(
         (name = "system", description = "Server status"),
@@ -55,6 +58,9 @@ mod tests {
             "/api/v1/images/{id}",
             "/api/v1/images/{id}/original",
             "/api/v1/images/{id}/thumbnail",
+            "/api/v1/images/{id}/analyze",
+            "/api/v1/images/{id}/objects",
+            "/api/v1/images/{id}/objects/{object_id}/mask",
             "/api/v1/jobs/{id}",
             "/api/v1/jobs/{id}/events",
         ] {

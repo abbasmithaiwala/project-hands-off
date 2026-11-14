@@ -22,3 +22,4 @@ spike/images
 spike/*.pt
 spike/*.onnx
 spike/pip.log
+.venv-models

@@ -20,6 +20,8 @@ pub enum ErrorCode {
     Timeout,
     /// The operation was cancelled.
     Cancelled,
+    /// A required resource, such as a model file or API key, is not available.
+    Unavailable,
     /// An unexpected server-side failure.
     Internal,
 }
@@ -45,6 +47,9 @@ pub enum Error {
     /// The operation was cancelled.
     #[error("operation cancelled")]
     Cancelled,
+    /// A required resource is missing; the message says how to provide it.
+    #[error("{0}")]
+    Unavailable(String),
     /// An unexpected failure; the source is logged but never shown to clients.
     #[error("internal error")]
     Internal(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -64,6 +69,7 @@ impl Error {
             Self::NotFound(_) => ErrorCode::NotFound,
             Self::Timeout => ErrorCode::Timeout,
             Self::Cancelled => ErrorCode::Cancelled,
+            Self::Unavailable(_) => ErrorCode::Unavailable,
             Self::Internal(_) => ErrorCode::Internal,
         }
     }
@@ -93,6 +99,7 @@ mod tests {
             (Error::NotFound("image"), ErrorCode::NotFound),
             (Error::Timeout, ErrorCode::Timeout),
             (Error::Cancelled, ErrorCode::Cancelled),
+            (Error::Unavailable("x".into()), ErrorCode::Unavailable),
             (Error::internal(std::fmt::Error), ErrorCode::Internal),
         ];
         for (error, code) in cases {

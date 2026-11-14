@@ -13,5 +13,5 @@ workspace = true
 
 [dependencies]
 hands-off-core = { version = "0.1.0", path = "../core" }
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+image = { workspace = true, features = ["jpeg", "png", "webp"] }
 thiserror.workspace = true

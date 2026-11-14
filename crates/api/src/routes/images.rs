@@ -5,14 +5,15 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
-use hands_off_core::model::ImageRecord;
+use hands_off_core::model::{DetectedObject, ImageRecord};
 use hands_off_core::storage::BlobKey;
-use hands_off_core::{ContentHash, Error, ImageId};
+use hands_off_core::{ContentHash, Error, ImageId, JobId, ObjectId};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tokio::task::spawn_blocking;
 use utoipa::ToSchema;
 
+use crate::analysis;
 use crate::error::{ApiError, ErrorBody};
 use crate::state::AppState;
 
@@ -181,6 +182,101 @@ pub async fn get_thumbnail(
     Ok((
         [
             (header::CONTENT_TYPE, "image/jpeg"),
+            (header::CACHE_CONTROL, CACHE_FOREVER),
+        ],
+        bytes,
+    )
+        .into_response())
+}
+
+/// Reference to a newly started background job.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct JobCreated {
+    /// Use with the `/jobs/{id}` routes to follow progress.
+    pub job_id: JobId,
+}
+
+/// Start detecting and outlining the objects in an image.
+///
+/// The returned job streams one `object_found` event per object. Results are cached, so
+/// analysing the same image again is instant.
+#[utoipa::path(
+    post,
+    path = "/api/v1/images/{id}/analyze",
+    tag = "images",
+    params(("id" = ImageId, Path, description = "Image id")),
+    responses(
+        (status = 202, description = "Analysis started", body = JobCreated),
+        (status = 404, description = "Unknown image", body = ErrorBody),
+    )
+)]
+pub async fn analyze(
+    State(state): State<AppState>,
+    Path(id): Path<ImageId>,
+) -> Result<(StatusCode, Json<JobCreated>), ApiError> {
+    find(&state, id).await?;
+    let worker = state.clone();
+    let job_id = state
+        .jobs
+        .spawn("analyze", move |context| async move {
+            analysis::run(&worker, id, &context).await
+        })
+        .await?;
+    Ok((StatusCode::ACCEPTED, Json(JobCreated { job_id })))
+}
+
+/// List the objects found in an image.
+#[utoipa::path(
+    get,
+    path = "/api/v1/images/{id}/objects",
+    tag = "images",
+    params(("id" = ImageId, Path, description = "Image id")),
+    responses(
+        (status = 200, description = "Detected objects, most confident first", body = Vec<DetectedObject>),
+        (status = 404, description = "Unknown image, or it has not been analysed yet", body = ErrorBody),
+    )
+)]
+pub async fn list_objects(
+    State(state): State<AppState>,
+    Path(id): Path<ImageId>,
+) -> Result<Json<Vec<DetectedObject>>, ApiError> {
+    find(&state, id).await?;
+    let objects = analysis::cached_objects(&state, id)
+        .await?
+        .ok_or(Error::NotFound("analysis"))?;
+    Ok(Json(objects))
+}
+
+/// Download one object's mask as a grayscale PNG (white is the object).
+#[utoipa::path(
+    get,
+    path = "/api/v1/images/{id}/objects/{object_id}/mask",
+    tag = "images",
+    params(
+        ("id" = ImageId, Path, description = "Image id"),
+        ("object_id" = u32, Path, description = "Object index within the image"),
+    ),
+    responses(
+        (status = 200, description = "Mask PNG", content_type = "image/png", body = Vec<u8>),
+        (status = 404, description = "Unknown image or object", body = ErrorBody),
+    )
+)]
+pub async fn get_mask(
+    State(state): State<AppState>,
+    Path((id, object_id)): Path<(ImageId, u32)>,
+) -> Result<Response, ApiError> {
+    find(&state, id).await?;
+    let objects = analysis::cached_objects(&state, id)
+        .await?
+        .ok_or(Error::NotFound("analysis"))?;
+    let object = ObjectId(object_id);
+    if !objects.iter().any(|o| o.id == object) {
+        return Err(Error::NotFound("object").into());
+    }
+    let bytes = state.blobs.get(&BlobKey::mask(id, object)).await?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/png"),
             (header::CACHE_CONTROL, CACHE_FOREVER),
         ],
         bytes,

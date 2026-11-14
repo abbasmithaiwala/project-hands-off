@@ -75,6 +75,11 @@ impl JobContext {
         });
     }
 
+    /// Publish an arbitrary event to the job's subscribers.
+    pub fn event(&self, event: JobEvent) {
+        self.job.emit(event);
+    }
+
     /// Token that is cancelled when the user cancels the job.
     #[must_use]
     pub fn cancellation(&self) -> &CancellationToken {

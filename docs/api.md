@@ -29,6 +29,7 @@ CI runs the same command and fails if the committed files differ.
 | `not_found` | 404 | Unknown image or job |
 | `timeout` | 504 | Operation exceeded its time budget |
 | `cancelled` | 409 | Operation was cancelled |
+| `unavailable` | 503 | A required model file or API key is missing; the message says how to provide it |
 | `internal` | 500 | Unexpected failure; details are logged, never returned |
 
 ## Images
@@ -38,7 +39,10 @@ CI runs the same command and fails if the committed files differ.
 | `POST /images` | Multipart upload with a `file` field. `201` for a new image, `200` if identical bytes were already stored. |
 | `GET /images/{id}` | Metadata (format, size, content hash). |
 | `GET /images/{id}/original` | Original bytes, with long-lived cache headers. |
-| `GET /images/{id}/thumbnail` | JPEG thumbnail (longest side 512 px). |
+| `GET /images/{id}/thumbnail` | JPEG thumbnail (longest side 512 px, never enlarged). |
+| `POST /images/{id}/analyze` | Start object detection; returns `202` with a `job_id`. See [vision.md](vision.md). |
+| `GET /images/{id}/objects` | Detected objects with labels, boxes, scores and outline polygons. `404` until analysed. |
+| `GET /images/{id}/objects/{object_id}/mask` | The object's mask as a grayscale PNG. |
 
 ## Jobs and event streams
 
@@ -50,7 +54,7 @@ Long-running work (analysis, generation) runs as a background job.
 | `GET /jobs/{id}/events` | Server-sent events. Replays everything emitted so far, then streams live, and ends after the terminal event. |
 | `DELETE /jobs/{id}` | Request cancellation (`202`). Cancelling a finished job has no effect. |
 
-Event types (the `type` field of each JSON payload, also used as the SSE event name): `progress`, `log`, `completed`, `failed`, `cancelled`. Jobs that exceed `HANDS_OFF_JOB_TIMEOUT_SECS` fail with the `timeout` code.
+Event types (the `type` field of each JSON payload, also used as the SSE event name): `progress`, `log`, `object_found`, `completed`, `failed`, `cancelled`. Jobs that exceed `HANDS_OFF_JOB_TIMEOUT_SECS` fail with the `timeout` code.
 
 ## Configuration
 
@@ -64,6 +68,8 @@ Everything has a default. Set variables in the environment, in `.env`, or in `lo
 | `HANDS_OFF_MODEL_DIR` | `models` | Downloaded model weights |
 | `HANDS_OFF_MAX_UPLOAD_MB` | `25` | Maximum upload size |
 | `HANDS_OFF_MAX_DIMENSION` | `8192` | Maximum image width or height |
+| `HANDS_OFF_RFDETR_SEG_URL` | none | Where to download the RF-DETR-Seg ONNX model if it is not in `HANDS_OFF_MODEL_DIR` |
+| `HANDS_OFF_RFDETR_SEG_SHA256` | none | Expected SHA-256 of that download |
 | `HANDS_OFF_JOB_TIMEOUT_SECS` | `180` | Maximum job run time |
 | `HANDS_OFF_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed browser origins |
 | `RUST_LOG` | `info,hands_off_api=debug` | Log verbosity |

@@ -18,6 +18,7 @@ fn event_name(event: &JobEvent) -> &'static str {
     match event {
         JobEvent::Progress { .. } => "progress",
         JobEvent::Log { .. } => "log",
+        JobEvent::ObjectFound { .. } => "object_found",
         JobEvent::Completed { .. } => "completed",
         JobEvent::Failed { .. } => "failed",
         JobEvent::Cancelled => "cancelled",

@@ -136,6 +136,146 @@
         }
       }
     },
+    "/api/v1/images/{id}/analyze": {
+      "post": {
+        "tags": ["images"],
+        "summary": "Start detecting and outlining the objects in an image.",
+        "description": "The returned job streams one `object_found` event per object. Results are cached, so\nanalysing the same image again is instant.",
+        "operationId": "analyze",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Analysis started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}/objects": {
+      "get": {
+        "tags": ["images"],
+        "summary": "List the objects found in an image.",
+        "operationId": "list_objects",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detected objects, most confident first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DetectedObject"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image, or it has not been analysed yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{id}/objects/{object_id}/mask": {
+      "get": {
+        "tags": ["images"],
+        "summary": "Download one object's mask as a grayscale PNG (white is the object).",
+        "operationId": "get_mask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Image id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImageId"
+            }
+          },
+          {
+            "name": "object_id",
+            "in": "path",
+            "description": "Object index within the image",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mask PNG",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown image or object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images/{id}/original": {
       "get": {
         "tags": ["images"],
@@ -388,7 +528,7 @@
       "DetectedObject": {
         "type": "object",
         "description": "An object found in an image.",
-        "required": ["id", "label", "bbox", "score"],
+        "required": ["id", "label", "bbox", "score", "outline"],
         "properties": {
           "bbox": {
             "$ref": "#/components/schemas/BBox",
@@ -401,6 +541,13 @@
           "label": {
             "type": "string",
             "description": "Human-readable class label."
+          },
+          "outline": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormalizedPoint"
+            },
+            "description": "Simplified outline of the object's mask, as a closed polygon."
           },
           "score": {
             "type": "number",
@@ -524,6 +671,7 @@
           "not_found",
           "timeout",
           "cancelled",
+          "unavailable",
           "internal"
         ]
       },
@@ -594,6 +742,17 @@
           }
         }
       },
+      "JobCreated": {
+        "type": "object",
+        "description": "Reference to a newly started background job.",
+        "required": ["job_id"],
+        "properties": {
+          "job_id": {
+            "$ref": "#/components/schemas/JobId",
+            "description": "Use with the `/jobs/{id}` routes to follow progress."
+          }
+        }
+      },
       "JobEvent": {
         "oneOf": [
           {
@@ -627,6 +786,21 @@
               "type": {
                 "type": "string",
                 "enum": ["log"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An object was found during image analysis.",
+            "required": ["object", "type"],
+            "properties": {
+              "object": {
+                "$ref": "#/components/schemas/DetectedObject",
+                "description": "The detected object."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["object_found"]
               }
             }
           },

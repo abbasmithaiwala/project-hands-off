@@ -22,6 +22,11 @@ test:
 deny:
     cargo deny check
 
+models:
+    python3 -m venv .venv-models
+    .venv-models/bin/pip install --quiet rfdetr onnx
+    .venv-models/bin/python scripts/export_models.py
+
 gen-api:
     cargo run --quiet -p hands-off-api --bin openapi > web/openapi.json
     cd web && npx openapi-typescript openapi.json -o src/api/schema.d.ts

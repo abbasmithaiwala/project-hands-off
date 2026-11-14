@@ -55,6 +55,61 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/images/{id}/analyze': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start detecting and outlining the objects in an image.
+     * @description The returned job streams one `object_found` event per object. Results are cached, so
+     *     analysing the same image again is instant.
+     */
+    post: operations['analyze']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/images/{id}/objects': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List the objects found in an image. */
+    get: operations['list_objects']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/images/{id}/objects/{object_id}/mask': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Download one object's mask as a grayscale PNG (white is the object). */
+    get: operations['get_mask']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/images/{id}/original': {
     parameters: {
       query?: never
@@ -171,6 +226,8 @@ export interface components {
       id: components['schemas']['ObjectId']
       /** @description Human-readable class label. */
       label: string
+      /** @description Simplified outline of the object's mask, as a closed polygon. */
+      outline: components['schemas']['NormalizedPoint'][]
       /**
        * Format: float
        * @description Detector confidence in `0.0..=1.0`.
@@ -231,6 +288,7 @@ export interface components {
       | 'not_found'
       | 'timeout'
       | 'cancelled'
+      | 'unavailable'
       | 'internal'
     /** @description Liveness report. */
     Health: {
@@ -278,6 +336,11 @@ export interface components {
        */
       width: number
     }
+    /** @description Reference to a newly started background job. */
+    JobCreated: {
+      /** @description Use with the `/jobs/{id}` routes to follow progress. */
+      job_id: components['schemas']['JobId']
+    }
     /** @description An event streamed to clients while a job runs. */
     JobEvent:
       | {
@@ -293,6 +356,12 @@ export interface components {
           line: string
           /** @enum {string} */
           type: 'log'
+        }
+      | {
+          /** @description The detected object. */
+          object: components['schemas']['DetectedObject']
+          /** @enum {string} */
+          type: 'object_found'
         }
       | {
           /** @description Optional job-specific result payload. */
@@ -529,6 +598,104 @@ export interface operations {
         }
       }
       /** @description Unknown image */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  analyze: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Analysis started */
+      202: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['JobCreated']
+        }
+      }
+      /** @description Unknown image */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  list_objects: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Detected objects, most confident first */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DetectedObject'][]
+        }
+      }
+      /** @description Unknown image, or it has not been analysed yet */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  get_mask: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Image id */
+        id: components['schemas']['ImageId']
+        /** @description Object index within the image */
+        object_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Mask PNG */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'image/png': number[]
+        }
+      }
+      /** @description Unknown image or object */
       404: {
         headers: {
           [name: string]: unknown
