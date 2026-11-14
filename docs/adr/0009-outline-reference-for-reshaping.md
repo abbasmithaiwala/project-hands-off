@@ -30,3 +30,6 @@ Each is one run on one photo, so treat them as strong hints, not statistics.
 - Quality on the flash model is acceptable but not as clean as pro; users who need the cleanest reshape can switch the generator in Settings.
 - Mixed edits (a slider plus a reshape) use the warped preview, as before.
 - A rerun of the benchmark on the golden images is still owed (ADR 0003, ADR 0008).
+
+## Addendum: "understand the object" in every generation prompt
+The outline prompt (v2) first asks the model to work out what the object is and how it is built, then to reshape it as a real object of that kind would look, so the result reads as an untouched photograph. On the perfume trial this removed the ghosted glass and distorted cap seen on `gemini-3.1-flash-image` with v1 (one run; Seedream held back and left the bottle unchanged). The same instruction, plus "do not stretch or squash textures; lengthen or shorten by extending or removing material", is now in the warped-preview and no-preview prompts (v2), and the summariser (v2) is told to name the object and describe the change as it would physically look. Not yet measured on the golden images.

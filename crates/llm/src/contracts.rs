@@ -26,13 +26,13 @@ pub const PLANNER_PROMPT_VERSION: &str = "v1.2";
 /// Schema identifier for edit summaries.
 pub const SUMMARY_SCHEMA: &str = "edit_summary";
 /// Bump when the summariser prompt or schema changes.
-pub const SUMMARISER_PROMPT_VERSION: &str = "v1";
+pub const SUMMARISER_PROMPT_VERSION: &str = "v2";
 /// System prompt for the summariser.
-pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v1.md");
+pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v2.md");
 const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v2.md");
-const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v1.md");
+const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v2.md");
 const GENERATOR_WITHOUT_PREVIEW: &str =
-    include_str!("../../../prompts/generator-without-preview.v1.md");
+    include_str!("../../../prompts/generator-without-preview.v2.md");
 
 /// System prompt for the suggester.
 pub const SUGGESTER_SYSTEM: &str = include_str!("../../../prompts/suggester.v1.md");

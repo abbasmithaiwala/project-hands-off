@@ -43,7 +43,7 @@ An unusable answer triggers one repair request that quotes the problem. If that 
 
 ## Image generation
 
-The image model is given the original photo and, when available, the rough warped preview as a geometry reference, plus an instruction written by the summariser. Prompts are in [`prompts/`](../prompts) (`summariser.v1.md`, `generator-with-preview.v1.md`, `generator-without-preview.v1.md`). The result is blended back into the original only inside the edited regions; see [ADR 0006](adr/0006-apply-pipeline.md).
+The image model is given the original photo and, when available, the rough warped preview as a geometry reference, plus an instruction written by the summariser. Prompts are in [`prompts/`](../prompts) (`summariser.v2.md`, `generator-with-preview.v2.md`, `generator-with-outline.v2.md`, `generator-without-preview.v2.md`). The result is blended back into the original only inside the edited regions; see [ADR 0006](adr/0006-apply-pipeline.md).
 
 A model that declines (content policy) or answers in words instead of an image produces a `refused` error, which is not retried elsewhere.
 
