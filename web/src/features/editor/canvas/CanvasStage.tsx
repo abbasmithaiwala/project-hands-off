@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { DetectedObject, Widget } from '@/api/client'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import type { DetectedObject } from '@/api/client'
 import { labelAnchor } from '@/lib/geometry'
 import { imageToScreen } from '@/lib/viewport'
 import type { Size, Viewport } from '@/lib/viewport'
+import type { ObjectPreview } from '../previews'
 import styles from './CanvasStage.module.css'
 import { ObjectLabel } from './ObjectLabel'
 import { BUTTON_ZOOM_FACTOR, createPixiStage, type CreateStage, type StageHandle } from './stage'
@@ -12,7 +13,10 @@ interface CanvasStageProps {
   objects: readonly DetectedObject[]
   hoveredId: number | null
   selectedId: number | null
-  widget: Widget | null
+  /** Warped previews to show, one per edited object. */
+  previews: readonly ObjectPreview[]
+  /** Drawn over the canvas, given the current view; used for the editing controls. */
+  overlay?: (context: { view: Viewport; imageSize: Size }) => ReactNode
   onHover: (id: number | null) => void
   onSelect: (id: number | null) => void
   onCycle: (direction: 1 | -1) => void
@@ -36,7 +40,8 @@ export function CanvasStage({
   objects,
   hoveredId,
   selectedId,
-  widget,
+  previews,
+  overlay,
   onHover,
   onSelect,
   onCycle,
@@ -88,7 +93,14 @@ export function CanvasStage({
 
   useEffect(() => stage?.setObjects(objects), [stage, objects])
   useEffect(() => stage?.setHighlight(hoveredId, selectedId), [stage, hoveredId, selectedId])
-  useEffect(() => stage?.setWidget(widget), [stage, widget])
+  const shownPreviews = useRef(new Set<number>())
+  useEffect(() => {
+    if (!stage) return
+    const ids = new Set(previews.map((p) => p.objectId))
+    for (const id of shownPreviews.current) if (!ids.has(id)) stage.setPreview(id, null)
+    for (const preview of previews) stage.setPreview(preview.objectId, preview.spec)
+    shownPreviews.current = ids
+  }, [stage, previews])
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const actions: Record<string, () => void> = {
@@ -139,6 +151,12 @@ export function CanvasStage({
             />
           )
         })}
+      {view && imageSize && overlay?.({ view, imageSize })}
+      {previews.length > 0 && (
+        <p className={styles.approximate} role="note">
+          Preview is approximate. The final image is generated when you apply.
+        </p>
+      )}
       {problem && (
         <div className={styles.message} role="alert">
           {problem}

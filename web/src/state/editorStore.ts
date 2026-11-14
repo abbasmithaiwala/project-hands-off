@@ -1,8 +1,23 @@
 import { create } from 'zustand'
-import type { DetectedObject, Edit, ImageRecord } from '@/api/client'
+import type { DetectedObject, Edit, ImageRecord, Widget } from '@/api/client'
 import { cycle } from '@/lib/geometry'
 
 export type AnalysisStatus = 'idle' | 'running' | 'done' | 'failed'
+
+/** An edit waiting to be applied, with what is needed to describe and preview it. */
+export interface PendingEdit {
+  key: string
+  objectId: number
+  objectLabel: string
+  propertyLabel: string
+  /** The control geometry the edit was made with. */
+  widget: Widget
+  edit: Edit
+}
+
+export function editKey(objectId: number, property: string): string {
+  return `${objectId}:${property}`
+}
 
 const MAX_LOG_LINES = 500
 
@@ -16,7 +31,7 @@ interface EditorState {
   analysisError: string | null
   log: string[]
   outputOpen: boolean
-  pendingEdits: Edit[]
+  pendingEdits: PendingEdit[]
 }
 
 interface EditorActions {
@@ -28,6 +43,9 @@ interface EditorActions {
   select: (id: number | null) => void
   setActiveProperty: (key: string | null) => void
   selectNext: (direction: 1 | -1) => void
+  setPendingEdit: (pending: PendingEdit) => void
+  resetEdit: (key: string) => void
+  clearEdits: () => void
   toggleOutput: () => void
   reset: () => void
 }
@@ -61,6 +79,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       objects: analysis === 'running' ? [] : state.objects,
       selectedId: analysis === 'running' ? null : state.selectedId,
       activeProperty: analysis === 'running' ? null : state.activeProperty,
+      pendingEdits: analysis === 'running' ? [] : state.pendingEdits,
     })),
   appendLog: (line) => set((state) => ({ log: [...state.log, line].slice(-MAX_LOG_LINES) })),
   hover: (hoveredId) => set({ hoveredId }),
@@ -75,6 +94,15 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
         direction,
       ),
     })),
+  setPendingEdit: (pending) =>
+    set((state) => ({
+      pendingEdits: state.pendingEdits.some((e) => e.key === pending.key)
+        ? state.pendingEdits.map((e) => (e.key === pending.key ? pending : e))
+        : [...state.pendingEdits, pending],
+    })),
+  resetEdit: (key) =>
+    set((state) => ({ pendingEdits: state.pendingEdits.filter((e) => e.key !== key) })),
+  clearEdits: () => set({ pendingEdits: [] }),
   toggleOutput: () => set((state) => ({ outputOpen: !state.outputOpen })),
   reset: () => set({ ...initial }),
 }))

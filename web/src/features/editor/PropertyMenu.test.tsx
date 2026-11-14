@@ -63,6 +63,20 @@ describe('PropertyMenu', () => {
     expect(onRetry).toHaveBeenCalled()
   })
 
+  it('marks properties that already have an edit', () => {
+    setup({ editedKeys: new Set(['shape']) })
+    const edited = screen.getAllByRole('img', { name: 'edited' })
+    expect(edited).toHaveLength(1)
+    expect(screen.getByRole('button', { name: /Outline shape/ })).toContainElement(
+      edited[0] as HTMLElement,
+    )
+  })
+
+  it('shows a status message politely', () => {
+    setup({ status: 'Placing the control…' })
+    expect(screen.getByRole('status')).toHaveTextContent('Placing the control…')
+  })
+
   it('never shows raw errors', () => {
     setup({ properties: undefined, error: new Error('TypeError: x is undefined at line 4') })
     expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong. Please try again.')

@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Widget } from '@/api/client'
 import { useToastStore } from '@/design/toastStore'
 import { useEditorStore } from '@/state/editorStore'
@@ -21,6 +21,15 @@ const slider: Widget = {
   min: 0.5,
   max: 1.5,
   initial: 1,
+}
+
+const shape: Widget = {
+  kind: 'control_points',
+  points: [
+    { x: 0.2, y: 0.2 },
+    { x: 0.6, y: 0.2 },
+    { x: 0.4, y: 0.6 },
+  ],
 }
 
 const properties = {
@@ -148,26 +157,29 @@ describe('EditorScreen editing', () => {
     expect(screen.getByRole('button', { name: 'Outline shape' })).toBeInTheDocument()
   })
 
-  it('draws the planned control when a property is picked', async () => {
+  it('shows the planned control as an accessible slider when a property is picked', async () => {
     const { stage } = await withObjects()
     act(() => stage.callbacks().onSelect(0))
     await userEvent.click(await screen.findByRole('button', { name: 'Couch length' }))
+    act(() => stage.callbacks().onViewChange({ scale: 0.5, x: 0, y: 0 }))
 
-    await waitFor(() => expect(stage.handle.setWidget).toHaveBeenLastCalledWith(slider))
+    const handle = await screen.findByRole('slider', { name: 'Couch length of couch' })
+    expect(handle).toHaveAttribute('aria-valuenow', '100')
     expect(screen.getByRole('button', { name: 'Couch length' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
   })
 
-  it('clears the control when the selection is cleared', async () => {
+  it('removes the control when the selection is cleared', async () => {
     const { stage } = await withObjects()
     act(() => stage.callbacks().onSelect(0))
     await userEvent.click(await screen.findByRole('button', { name: 'Couch length' }))
-    await waitFor(() => expect(stage.handle.setWidget).toHaveBeenLastCalledWith(slider))
+    act(() => stage.callbacks().onViewChange({ scale: 0.5, x: 0, y: 0 }))
+    await screen.findByRole('slider')
 
     act(() => stage.callbacks().onSelect(null))
-    await waitFor(() => expect(stage.handle.setWidget).toHaveBeenLastCalledWith(null))
+    await waitFor(() => expect(screen.queryByRole('slider')).not.toBeInTheDocument())
     expect(screen.queryByRole('region', { name: 'Edit couch' })).not.toBeInTheDocument()
   })
 
@@ -204,6 +216,122 @@ describe('EditorScreen editing', () => {
     const { stage, unmount } = await open()
     unmount()
     expect(stage.handle.destroy).toHaveBeenCalled()
+  })
+})
+
+describe('EditorScreen edits', () => {
+  async function editing() {
+    const context = await withObjects({
+      'POST /api/v1/images/img-1/objects/0/widget': async (request) => {
+        const { property } = (await request.clone().json()) as { property: string }
+        return property === 'shape' ? shape : slider
+      },
+    })
+    act(() => context.stage.callbacks().onSelect(0))
+    await userEvent.click(await screen.findByRole('button', { name: 'Couch length' }))
+    act(() => context.stage.callbacks().onViewChange({ scale: 0.5, x: 0, y: 0 }))
+    const handle = await screen.findByRole('slider', { name: 'Couch length of couch' })
+    handle.focus()
+    return { ...context, handle }
+  }
+
+  it('records a typed, normalised edit and previews it on the canvas', async () => {
+    const { stage } = await editing()
+    await userEvent.keyboard('{ArrowLeft}')
+
+    const [pending] = useEditorStore.getState().pendingEdits
+    expect(pending?.edit).toEqual({
+      object_id: 0,
+      property: 'length',
+      change: { kind: 'slider', value: expect.closeTo(0.95, 5) },
+    })
+    expect(pending).toMatchObject({
+      key: '0:length',
+      objectLabel: 'couch',
+      propertyLabel: 'Couch length',
+    })
+
+    await waitFor(() => expect(stage.handle.setPreview).toHaveBeenCalled())
+    const [objectId, spec] = vi.mocked(stage.handle.setPreview).mock.calls.at(-1) ?? []
+    expect(objectId).toBe(0)
+    expect(spec?.maskUrl).toBe('/api/v1/images/img-1/objects/0/mask')
+    // The axis runs from x=120 to x=1080 (0.1 and 0.9 of 1200 px); 95% of it ends at x=1032.
+    const moved = spec?.deform?.({ x: 1080, y: 400 })
+    expect(moved?.x).toBeCloseTo(1032, 3)
+    expect(moved?.y).toBeCloseTo(400, 3)
+    expect(screen.getByRole('note')).toHaveTextContent('Preview is approximate')
+  })
+
+  it('shows the pending change in the action bar and marks the property as edited', async () => {
+    await editing()
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}')
+    await userEvent.click(await screen.findByRole('button', { name: '1 change' }))
+    expect(screen.getByRole('list', { name: 'Pending changes' })).toHaveTextContent(
+      'Couch length · couch90%',
+    )
+    expect(screen.getByRole('img', { name: 'edited' })).toBeInTheDocument()
+  })
+
+  it('drops the edit and its preview when the control returns to where it started', async () => {
+    const { stage } = await editing()
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(useEditorStore.getState().pendingEdits).toHaveLength(1)
+
+    await userEvent.keyboard('{ArrowRight}')
+    expect(useEditorStore.getState().pendingEdits).toHaveLength(0)
+    await waitFor(() => expect(stage.handle.setPreview).toHaveBeenLastCalledWith(0, null))
+  })
+
+  it('resets one edit from the list and restores the control', async () => {
+    const { handle } = await editing()
+    await userEvent.keyboard('{ArrowLeft}')
+    await userEvent.click(await screen.findByRole('button', { name: '1 change' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Reset Couch length · couch' }))
+
+    expect(useEditorStore.getState().pendingEdits).toEqual([])
+    expect(handle).toHaveAttribute('aria-valuenow', '100')
+  })
+
+  it('cancels every pending edit', async () => {
+    await editing()
+    await userEvent.keyboard('{ArrowLeft}')
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(useEditorStore.getState().pendingEdits).toEqual([])
+    expect(screen.queryByRole('group', { name: 'Pending edits' })).not.toBeInTheDocument()
+  })
+
+  it('keeps an edit when another property is chosen, and restores the control later', async () => {
+    await editing()
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}')
+
+    await userEvent.click(screen.getByRole('button', { name: /Outline shape/ }))
+    await waitFor(() => expect(screen.queryByRole('slider')).not.toBeInTheDocument())
+    expect(useEditorStore.getState().pendingEdits).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /Couch length/ }))
+    expect(await screen.findByRole('slider', { name: 'Couch length of couch' })).toHaveAttribute(
+      'aria-valuenow',
+      '90',
+    )
+  })
+
+  it('keeps previewing an edited object after it is deselected', async () => {
+    const { stage } = await editing()
+    await userEvent.keyboard('{ArrowLeft}')
+    act(() => stage.callbacks().onSelect(null))
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Edit couch' })).not.toBeInTheDocument(),
+    )
+    expect(vi.mocked(stage.handle.setPreview).mock.calls.at(-1)?.[1]).not.toBeNull()
+    expect(screen.getByRole('button', { name: '1 change' })).toBeInTheDocument()
+  })
+
+  it('says Apply is not available yet', async () => {
+    await editing()
+    await userEvent.keyboard('{ArrowLeft}')
+    const apply = await screen.findByRole('button', { name: 'Apply' })
+    expect(apply).toBeDisabled()
+    expect(apply).toHaveAccessibleDescription(/not connected yet/)
   })
 })
 

@@ -82,3 +82,16 @@
     transform: translateY(8px);
   }
 }
+
+.edited {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.status {
+  margin: 0;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}

@@ -24,4 +24,17 @@ for (const scheme of ['dark', 'light'] as const) {
     await page.waitForTimeout(400)
     await expect(page).toHaveScreenshot(`editor-${scheme}.png`)
   })
+
+  test(`editing a change with a live preview @visual (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
+    await openEditor(page)
+    await clickCouch(page)
+    await page.getByRole('button', { name: 'Couch length' }).click()
+    const handle = page.getByRole('slider', { name: /Couch length of couch/ })
+    await handle.focus()
+    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowLeft')
+    await page.mouse.move(2, 2)
+    await page.waitForTimeout(600)
+    await expect(page).toHaveScreenshot(`editing-${scheme}.png`)
+  })
 }

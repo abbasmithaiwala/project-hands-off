@@ -49,6 +49,34 @@ describe('accessibility (axe)', () => {
     expect(await axe(container)).toHaveNoViolations()
   })
 
+  it('editing controls and the pending-changes list have no violations', async () => {
+    installFakeEventSource()
+    const stage = fakeStage()
+    const { container } = renderWithProviders(<App createStage={stage.createStage} />, {
+      ...routes,
+      'POST /api/v1/images/img-1/objects/0/widget': () => ({
+        kind: 'slider',
+        axis: { start: { x: 0.1, y: 0.5 }, end: { x: 0.9, y: 0.5 } },
+        min: 0.5,
+        max: 1.5,
+        initial: 1,
+      }),
+    })
+    act(() => useEditorStore.getState().openImage(image))
+    await screen.findByTestId('canvas-stage')
+    act(() => {
+      useEditorStore.getState().addObject(detectedObject(0, 'couch'))
+      useEditorStore.getState().select(0)
+      stage.callbacks().onViewChange({ scale: 0.5, x: 0, y: 0 })
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Couch length' }))
+    const handle = await screen.findByRole('slider', { name: 'Couch length of couch' })
+    handle.focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    await userEvent.click(await screen.findByRole('button', { name: '1 change' }))
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
   it('settings dialog has no violations', async () => {
     installFakeEventSource()
     renderWithProviders(<App createStage={fakeStage().createStage} />, routes)

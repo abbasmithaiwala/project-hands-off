@@ -14,6 +14,10 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 
+// jsdom does not implement pointer capture, which draggable handles rely on.
+Element.prototype.setPointerCapture ??= () => undefined
+Element.prototype.releasePointerCapture ??= () => undefined
+
 afterEach(() => {
   cleanup()
   useEditorStore.getState().reset()

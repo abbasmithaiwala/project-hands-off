@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { DetectedObject, ImageRecord } from '@/api/client'
-import { useEditorStore } from './editorStore'
+import { editKey, useEditorStore, type PendingEdit } from './editorStore'
 
 const image = { id: 'img-1', width: 100, height: 80 } as ImageRecord
 
@@ -11,6 +11,23 @@ function object(id: number): DetectedObject {
     score: 0.9,
     bbox: { x: 0, y: 0, width: 1, height: 1 },
     outline: [],
+  }
+}
+
+function pending(objectId: number, property: string, value = 0.8): PendingEdit {
+  return {
+    key: editKey(objectId, property),
+    objectId,
+    objectLabel: `thing ${objectId}`,
+    propertyLabel: property,
+    widget: {
+      kind: 'slider',
+      axis: { start: { x: 0, y: 0 }, end: { x: 1, y: 0 } },
+      min: 0.5,
+      max: 1.5,
+      initial: 1,
+    },
+    edit: { object_id: objectId, property, change: { kind: 'slider', value } },
   }
 }
 
@@ -87,5 +104,36 @@ describe('editor store', () => {
     state().hover(3)
     state().select(4)
     expect(state()).toMatchObject({ hoveredId: 3, selectedId: 4 })
+  })
+
+  it('keeps one pending edit per object and property, replacing it as the user drags', () => {
+    state().setPendingEdit(pending(0, 'length', 0.9))
+    state().setPendingEdit(pending(0, 'length', 0.7))
+    state().setPendingEdit(pending(0, 'height'))
+    state().setPendingEdit(pending(1, 'length'))
+    expect(state().pendingEdits.map((e) => e.key)).toEqual(['0:length', '0:height', '1:length'])
+    expect(state().pendingEdits[0]?.edit.change).toEqual({ kind: 'slider', value: 0.7 })
+  })
+
+  it('resets one edit or all of them', () => {
+    state().setPendingEdit(pending(0, 'length'))
+    state().setPendingEdit(pending(0, 'height'))
+    state().resetEdit('0:length')
+    expect(state().pendingEdits.map((e) => e.key)).toEqual(['0:height'])
+    state().clearEdits()
+    expect(state().pendingEdits).toEqual([])
+  })
+
+  it('drops pending edits when a new image or analysis starts', () => {
+    state().setPendingEdit(pending(0, 'length'))
+    state().setAnalysis('running')
+    expect(state().pendingEdits).toEqual([])
+    state().setPendingEdit(pending(0, 'length'))
+    state().openImage(image)
+    expect(state().pendingEdits).toEqual([])
+  })
+
+  it('builds stable keys', () => {
+    expect(editKey(3, 'arm_position')).toBe('3:arm_position')
   })
 })

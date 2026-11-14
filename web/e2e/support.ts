@@ -1,10 +1,24 @@
 import { readFileSync } from 'node:fs'
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 
 const photo = readFileSync(new URL('../../eval/golden/couch.jpg', import.meta.url))
-const couch = JSON.parse(
-  readFileSync(new URL('./fixtures/couch-object.json', import.meta.url), 'utf8'),
-)
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url))
+const couch = JSON.parse(fixture('couch-object.json').toString('utf8'))
+const mask = fixture('couch-mask.png')
+
+const SLIDER = {
+  kind: 'slider',
+  axis: { start: { x: 0.215, y: 0.72 }, end: { x: 0.69, y: 0.72 } },
+  min: 0.5,
+  max: 1.5,
+  initial: 1,
+}
+
+const WIDGETS: Record<string, unknown> = {
+  couch_length: SLIDER,
+  armrest_shape: JSON.parse(fixture('widget-control-points.json').toString('utf8')),
+  cushions: JSON.parse(fixture('widget-multi-handle.json').toString('utf8')),
+}
 
 const IMAGE = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -30,14 +44,6 @@ const PROPERTIES = {
     { key: 'armrest_shape', label: 'Armrest contour', widget: 'control_points' },
     { key: 'cushions', label: 'Cushion placement', widget: 'multi_handle' },
   ],
-}
-
-const SLIDER = {
-  kind: 'slider',
-  axis: { start: { x: 0.22, y: 0.7 }, end: { x: 0.66, y: 0.7 } },
-  min: 0.5,
-  max: 1.5,
-  initial: 1,
 }
 
 const json = (route: Route, body: unknown, status = 200) =>
@@ -87,7 +93,16 @@ export async function mockApi(page: Page, options: ApiMockOptions = {}) {
           503,
         ),
   )
-  await page.route(`${base}/images/*/objects/0/widget`, (route) => json(route, SLIDER))
+  await page.route(`${base}/images/*/objects/0/mask`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: mask }),
+  )
+  await page.route(`${base}/images/*/objects/0/widget`, (route) => {
+    const { property } = route.request().postDataJSON() as { property: string }
+    const widget = WIDGETS[property]
+    return widget
+      ? json(route, widget)
+      : json(route, { code: 'not_found', message: 'property not found' }, 404)
+  })
   await page.route(`${base}/settings`, (route) =>
     json(route, {
       openrouter: {
@@ -118,4 +133,17 @@ export async function clickCouch(page: Page) {
   const box = await page.getByTestId('canvas-stage').boundingBox()
   if (!box) throw new Error('canvas not visible')
   await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.62)
+}
+
+/** Drag a handle by `(dx, dy)` screen pixels using the mouse. */
+export async function dragHandle(page: Page, handle: Locator, dx: number, dy: number) {
+  const box = await handle.boundingBox()
+  if (!box) throw new Error('handle not visible')
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + dx / 2, y + dy / 2, { steps: 4 })
+  await page.mouse.move(x + dx, y + dy, { steps: 4 })
+  await page.mouse.up()
 }

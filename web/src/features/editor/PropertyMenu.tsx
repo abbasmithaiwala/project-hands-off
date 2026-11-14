@@ -22,6 +22,10 @@ interface PropertyMenuProps {
   loading: boolean
   error: unknown
   activeKey: string | null
+  /** Properties that already have a pending edit. */
+  editedKeys?: ReadonlySet<string>
+  /** A short message shown under the chips, for example while a control is being placed. */
+  status?: string
   onPick: (key: string) => void
   onRetry: () => void
 }
@@ -33,6 +37,8 @@ export function PropertyMenu({
   loading,
   error,
   activeKey,
+  editedKeys,
+  status,
   onPick,
   onRetry,
 }: PropertyMenuProps) {
@@ -73,11 +79,19 @@ export function PropertyMenu({
                 >
                   <Icon size={16} aria-hidden />
                   {property.label}
+                  {editedKeys?.has(property.key) && (
+                    <span className={styles.edited} role="img" aria-label="edited" />
+                  )}
                 </button>
               </li>
             )
           })}
         </ul>
+      )}
+      {status && (
+        <p className={styles.status} role="status">
+          {status}
+        </p>
       )}
     </Panel>
   )

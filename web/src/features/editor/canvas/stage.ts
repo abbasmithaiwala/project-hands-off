@@ -1,7 +1,17 @@
-import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
-import type { DetectedObject, Widget } from '@/api/client'
+import { Application, Container, Graphics, MeshSimple, Sprite, Texture } from 'pixi.js'
+import type { DetectedObject } from '@/api/client'
+import { dilate, fillMasked } from '@/lib/fill'
 import { readCssColor } from '@/lib/color'
 import { pickObject, type Point } from '@/lib/geometry'
+import {
+  deformPositions,
+  gridMesh,
+  objectRegion,
+  PREVIEW_MARGIN,
+  type Deformation,
+  type GridMesh,
+  type Rect,
+} from '@/lib/warp'
 import {
   fitViewport,
   imageToScreen,
@@ -23,10 +33,18 @@ export interface StageHandle {
   setImage: (url: string) => Promise<Size>
   setObjects: (objects: readonly DetectedObject[]) => void
   setHighlight: (hovered: number | null, selected: number | null) => void
-  setWidget: (widget: Widget | null) => void
+  /** Show (or with `null`, remove) the warped preview of one object. */
+  setPreview: (objectId: number, spec: PreviewSpec | null) => void
   fit: () => void
   zoomBy: (factor: number) => void
   destroy: () => void
+}
+
+/** What to preview for one object: its mask and how its pixels should move (in image pixels). */
+export interface PreviewSpec {
+  bbox: { x: number; y: number; width: number; height: number }
+  maskUrl: string
+  deform: Deformation | null
 }
 
 export type CreateStage = (
@@ -34,10 +52,143 @@ export type CreateStage = (
   callbacks: StageCallbacks,
 ) => Promise<StageHandle>
 
-const FIT_PADDING = 64
+// Room kept clear for the top bar and the floating menus, so controls are never underneath them.
+const FIT_PADDING = { top: 72, right: 64, bottom: 210, left: 64 }
 const DRAG_THRESHOLD_PX = 4
 const WHEEL_ZOOM_SPEED = 0.01
 const BUTTON_ZOOM_FACTOR = 1.25
+const PREVIEW_GRID = 28
+const PREVIEW_TEXTURE_MAX = 1024
+const FILL_RESOLUTION = 96
+const FILL_GROW_PX = 2
+
+interface PreviewLayer {
+  container: Container
+  mesh: MeshSimple
+  grid: GridMesh
+  maskUrl: string
+}
+
+function makeCanvas(width: number, height: number) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) throw new Error('2D canvas is not available')
+  return { canvas, context }
+}
+
+/**
+ * Cut the object out of the photo using its mask, build a smooth patch for the spot it leaves
+ * behind, and a mesh to deform the cutout. The patch and mesh share one container.
+ */
+async function buildPreviewLayer(
+  photo: ImageBitmap,
+  imageSize: Size,
+  spec: PreviewSpec,
+): Promise<PreviewLayer> {
+  const region = objectRegion(spec.bbox, imageSize, PREVIEW_MARGIN)
+  const scale = Math.min(1, PREVIEW_TEXTURE_MAX / Math.max(region.width, region.height))
+  const width = Math.max(1, Math.round(region.width * scale))
+  const height = Math.max(1, Math.round(region.height * scale))
+
+  const maskBitmap = await createImageBitmap(await (await fetch(spec.maskUrl)).blob())
+  const crop = makeCanvas(width, height)
+  crop.context.drawImage(
+    photo,
+    region.x,
+    region.y,
+    region.width,
+    region.height,
+    0,
+    0,
+    width,
+    height,
+  )
+
+  const maskCrop = makeCanvas(width, height)
+  maskCrop.context.filter = 'blur(1px)'
+  maskCrop.context.drawImage(
+    maskBitmap,
+    (region.x * maskBitmap.width) / imageSize.width,
+    (region.y * maskBitmap.height) / imageSize.height,
+    (region.width * maskBitmap.width) / imageSize.width,
+    (region.height * maskBitmap.height) / imageSize.height,
+    0,
+    0,
+    width,
+    height,
+  )
+  maskBitmap.close()
+
+  const pixels = crop.context.getImageData(0, 0, width, height)
+  const maskPixels = maskCrop.context.getImageData(0, 0, width, height)
+  for (let i = 0; i < width * height; i++) {
+    pixels.data[i * 4 + 3] = maskPixels.data[i * 4] ?? 0
+  }
+  crop.context.putImageData(pixels, 0, 0)
+  const cutout = Texture.from(crop.canvas)
+
+  const patch = buildPatch(photo, region, maskCrop.canvas, width, height)
+
+  const grid = gridMesh(region, PREVIEW_GRID, PREVIEW_GRID)
+  const mesh = new MeshSimple({
+    texture: cutout,
+    vertices: new Float32Array(grid.positions),
+    uvs: grid.uvs,
+    indices: grid.indices,
+  })
+  const container = new Container()
+  container.addChild(patch, mesh)
+  return { container, mesh, grid, maskUrl: spec.maskUrl }
+}
+
+/** A low-resolution, smoothly filled stand-in for the background behind the object. */
+function buildPatch(
+  photo: ImageBitmap,
+  region: Rect,
+  maskCanvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+): Sprite {
+  const shrink = Math.min(1, FILL_RESOLUTION / Math.max(width, height))
+  const w = Math.max(1, Math.round(width * shrink))
+  const h = Math.max(1, Math.round(height * shrink))
+
+  const small = makeCanvas(w, h)
+  small.context.drawImage(photo, region.x, region.y, region.width, region.height, 0, 0, w, h)
+  const rgba = small.context.getImageData(0, 0, w, h).data
+  const rgb = new Uint8ClampedArray(w * h * 3)
+  for (let i = 0; i < w * h; i++) {
+    rgb[i * 3] = rgba[i * 4] ?? 0
+    rgb[i * 3 + 1] = rgba[i * 4 + 1] ?? 0
+    rgb[i * 3 + 2] = rgba[i * 4 + 2] ?? 0
+  }
+
+  const smallMask = makeCanvas(w, h)
+  smallMask.context.drawImage(maskCanvas, 0, 0, w, h)
+  const maskData = smallMask.context.getImageData(0, 0, w, h).data
+  const masked = new Uint8Array(w * h)
+  for (let i = 0; i < w * h; i++) masked[i] = (maskData[i * 4] ?? 0) > 127 ? 1 : 0
+  const covered = dilate(masked, w, h, FILL_GROW_PX)
+  const filled = fillMasked(rgb, covered, w, h)
+
+  const out = makeCanvas(w, h)
+  const image = out.context.createImageData(w, h)
+  for (let i = 0; i < w * h; i++) {
+    image.data[i * 4] = filled[i * 3] ?? 0
+    image.data[i * 4 + 1] = filled[i * 3 + 1] ?? 0
+    image.data[i * 4 + 2] = filled[i * 3 + 2] ?? 0
+    image.data[i * 4 + 3] = covered[i] ? 255 : 0
+  }
+  out.context.putImageData(image, 0, 0)
+
+  const sprite = new Sprite(Texture.from(out.canvas))
+  sprite.position.set(region.x, region.y)
+  sprite.width = region.width
+  sprite.height = region.height
+  return sprite
+}
 
 export const createPixiStage: CreateStage = async (container, callbacks) => {
   const app = new Application()
@@ -47,6 +198,7 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
     autoDensity: true,
     resolution: window.devicePixelRatio || 1,
     backgroundAlpha: 0,
+    preference: 'webgl',
   })
   const canvas = app.canvas
   canvas.style.display = 'block'
@@ -54,7 +206,9 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
   container.appendChild(canvas)
 
   const world = new Container()
+  const previewLayer = new Container()
   const overlay = new Graphics()
+  world.addChild(previewLayer)
   world.addChild(overlay)
   app.stage.addChild(world)
 
@@ -67,7 +221,9 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
     []
   let hovered: number | null = null
   let selected: number | null = null
-  let widget: Widget | null = null
+  let imageBitmap: ImageBitmap | null = null
+  const wanted = new Map<number, PreviewSpec>()
+  const layers = new Map<number, PreviewLayer>()
   let frame = 0
 
   const containerSize = (): Size => ({
@@ -89,46 +245,40 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
     for (const object of objects) {
       const isSelected = object.id === selected
       if (!isSelected && object.id !== hovered) continue
+      const deform = wanted.get(object.id)?.deform
+      const outline = object.outline.map((p) => {
+        const pixel = toPixels(p)
+        return deform ? deform(pixel) : pixel
+      })
       overlay
         .poly(
-          object.outline.flatMap((p) => [p.x * imageSize.width, p.y * imageSize.height]),
+          outline.flatMap((p) => [p.x, p.y]),
           true,
         )
         .fill({ color: accent, alpha: isSelected ? 0.18 : 0.1 })
         .stroke({ width: onScreen(isSelected ? 2.5 : 2), color: accent, alpha: 1, join: 'round' })
     }
-
-    if (widget) drawWidget(widget, accent, onScreen)
   }
 
-  function drawWidget(w: Widget, accent: number, onScreen: (px: number) => number) {
-    const dot = (p: Point, filled: boolean) =>
-      overlay
-        .circle(p.x, p.y, onScreen(7))
-        .fill({ color: filled ? 0xffffff : 0x000000, alpha: filled ? 1 : 0.35 })
-        .stroke({ width: onScreen(2.5), color: accent })
-    if (w.kind === 'slider') {
-      const start = toPixels(w.axis.start)
-      const end = toPixels(w.axis.end)
-      overlay
-        .moveTo(start.x, start.y)
-        .lineTo(end.x, end.y)
-        .stroke({ width: onScreen(3), color: accent })
-      dot(start, true)
-      dot(end, false)
-    } else if (w.kind === 'control_points') {
-      const points = w.points.map(toPixels)
-      overlay
-        .poly(
-          points.flatMap((p) => [p.x, p.y]),
-          true,
-        )
-        .stroke({ width: onScreen(1.5), color: 0xffffff, alpha: 0.9 })
-      points.forEach((p) => dot(p, true))
-    } else {
-      w.handles.map(toPixels).forEach((p) => dot(p, true))
-    }
+  function removeLayer(objectId: number) {
+    const layer = layers.get(objectId)
+    if (!layer) return
+    previewLayer.removeChild(layer.container)
+    layer.container.destroy({ children: true, texture: true })
+    layers.delete(objectId)
   }
+
+  function clearPreviews() {
+    for (const id of [...layers.keys()]) removeLayer(id)
+    wanted.clear()
+  }
+
+  function applyDeformation(layer: PreviewLayer, deform: Deformation | null) {
+    layer.container.visible = deform !== null
+    if (deform) deformPositions(layer.grid.positions, deform, layer.mesh.vertices as Float32Array)
+  }
+
+  const building = new Set<number>()
 
   function apply() {
     world.scale.set(view.scale)
@@ -226,6 +376,9 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
     async setImage(url) {
       const response = await fetch(url)
       const bitmap = await createImageBitmap(await response.blob())
+      clearPreviews()
+      imageBitmap?.close()
+      imageBitmap = bitmap
       const texture = Texture.from(bitmap)
       texture.source.autoGenerateMipmaps = true
       sprite?.destroy({ texture: true })
@@ -247,9 +400,38 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
       selected = nextSelected
       drawOverlay()
     },
-    setWidget(next) {
-      widget = next
+    setPreview(objectId, spec) {
+      if (!spec) {
+        wanted.delete(objectId)
+        removeLayer(objectId)
+        drawOverlay()
+        return
+      }
+      wanted.set(objectId, spec)
+      const existing = layers.get(objectId)
+      if (existing && existing.maskUrl === spec.maskUrl) {
+        applyDeformation(existing, spec.deform)
+        drawOverlay()
+        return
+      }
       drawOverlay()
+      removeLayer(objectId)
+      if (building.has(objectId) || !imageBitmap) return
+      building.add(objectId)
+      buildPreviewLayer(imageBitmap, imageSize, spec)
+        .then((layer) => {
+          building.delete(objectId)
+          const latest = wanted.get(objectId)
+          if (!latest || latest.maskUrl !== layer.maskUrl) {
+            layer.container.destroy({ children: true, texture: true })
+            return
+          }
+          layers.set(objectId, layer)
+          previewLayer.addChild(layer.container)
+          applyDeformation(layer, latest.deform)
+          drawOverlay()
+        })
+        .catch(() => building.delete(objectId))
     },
     fit() {
       autoFit = true
@@ -261,6 +443,8 @@ export const createPixiStage: CreateStage = async (container, callbacks) => {
     },
     destroy() {
       cancelAnimationFrame(frame)
+      clearPreviews()
+      imageBitmap?.close()
       resizeObserver.disconnect()
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)

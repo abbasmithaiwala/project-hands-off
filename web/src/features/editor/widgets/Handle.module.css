@@ -1,0 +1,50 @@
+.handle {
+  position: absolute;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+
+.handle::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: var(--radius-full);
+  background: #fff;
+  box-shadow:
+    0 0 0 2.5px var(--color-accent),
+    0 2px 8px rgba(0, 0, 0, 0.45);
+  transition:
+    transform var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.handle:hover::before {
+  transform: scale(1.15);
+}
+
+.handle:focus-visible::before {
+  box-shadow:
+    0 0 0 2.5px var(--color-accent),
+    0 0 0 6px var(--color-focus),
+    0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+.dragging::before {
+  transform: scale(1.25);
+}
+
+.moved::before {
+  background: var(--color-accent);
+}

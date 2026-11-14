@@ -15,15 +15,29 @@ export interface Size {
 export const MIN_SCALE_FACTOR = 0.25
 export const MAX_SCALE = 16
 
-/** Centre the image in the container, as large as fits inside `padding`. */
-export function fitViewport(image: Size, container: Size, padding = 0): Viewport {
-  const availableWidth = Math.max(container.width - 2 * padding, 1)
-  const availableHeight = Math.max(container.height - 2 * padding, 1)
+export interface Padding {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+/**
+ * Centre the image in the part of the container left after `padding` (a number for all sides,
+ * or one value per side), as large as fits. Per-side padding keeps floating panels off the image.
+ */
+export function fitViewport(image: Size, container: Size, padding: number | Padding = 0): Viewport {
+  const { top, right, bottom, left } =
+    typeof padding === 'number'
+      ? { top: padding, right: padding, bottom: padding, left: padding }
+      : padding
+  const availableWidth = Math.max(container.width - left - right, 1)
+  const availableHeight = Math.max(container.height - top - bottom, 1)
   const scale = Math.min(availableWidth / image.width, availableHeight / image.height)
   return {
     scale,
-    x: (container.width - image.width * scale) / 2,
-    y: (container.height - image.height * scale) / 2,
+    x: left + (availableWidth - image.width * scale) / 2,
+    y: top + (availableHeight - image.height * scale) / 2,
   }
 }
 

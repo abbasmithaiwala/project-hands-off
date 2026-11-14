@@ -135,13 +135,13 @@ Exit: upload to selectable outlines feels instant and polished; Lighthouse acces
 
 Goal: manipulate controls and see an instant preview.
 
-- [ ] Widget renderer registry with exhaustive typing over the widget union; one component per widget type.
-- [ ] **Slider/stretch widget** with region-stretch preview.
-- [ ] **Control-point polygon widget** with handle dragging, snapping, and constraint to a sensible range.
-- [ ] **Multi-handle (puppet-warp-lite) widget** using Moving Least Squares or triangulated mesh warp.
-- [ ] WebGL warp pipeline on the masked crop (Web Worker/OffscreenCanvas where it helps); 60fps target; preview clearly labelled as approximate.
-- [ ] Edit model: each drag produces a normalised, typed `Edit` (origin, target, scalar); pending edits list with per-edit reset; Apply and Cancel bar.
-- [ ] Keyboard control for handles (arrow-key nudging, modifier for fine steps) and screen-reader labels.
+- [x] Widget renderer registry with exhaustive typing over the widget union; one component per widget type.
+- [x] **Slider/stretch widget** with region-stretch preview.
+- [x] **Control-point polygon widget** with handle dragging, snapping, and constraint to a sensible range.
+- [x] **Multi-handle (puppet-warp-lite) widget** using Moving Least Squares or triangulated mesh warp.
+- [x] WebGL warp pipeline on the masked crop (no Web Worker: the deformation costs about 0.15 ms per frame, so it is not needed); 60fps target; preview clearly labelled as approximate.
+- [x] Edit model: each drag produces a normalised, typed `Edit` (origin, target, scalar); pending edits list with per-edit reset; Apply and Cancel bar.
+- [x] Keyboard control for handles (arrow-key nudging, modifier for fine steps) and screen-reader labels.
 
 Tests: pure unit tests for warp math and coordinate transforms (`proptest`-style invariants in TS where useful), component tests for each widget, Playwright test dragging a handle and asserting the pending edit payload.
 
@@ -243,3 +243,4 @@ Review these at the end of every phase.
 - 2026-11-14: Phase 3 done (with SAM click-to-segment and YOLO11 deferred). Rust `ort` + RF-DETR-Seg reproduces the Python reference (IoU >= 0.98), ~260-290 ms per image in release. Model manager with checksums and download, EXIF orientation, mask cleanup and outlines, `/analyze` job streaming `object_found` events, cached results. Release builds need LTO off (see ADR 0004). Golden tests skip when the model is not installed.
 - 2026-11-14: Phase 4 done. `llm` crate (OpenRouter client with retry, fallback and cost capture; mock and demo providers; strict JSON schemas), versioned prompts, suggester and widget planner with validation, one repair retry and deterministic defaults, settings API (write-only key, model choice), `HANDS_OFF_DEMO_AI` mode. Benchmarked six models including `typesafe/jev-router` (ADR 0005). Fixed a real schema bug and a real placement-quality problem found by live testing. Note: `jev` turned out to be TypeSafe's Jev Router model on OpenRouter, not the typed-decisions API assumed earlier; it is supported as an optional model choice and the Decisions API phase below needs revisiting.
 - 2026-11-14: Phase 5 done. Design tokens and primitives, landing (drop, paste, pick), lazy-loaded editor with a PixiJS canvas (pan, zoom, hover, select, keyboard), property menu fed by the AI suggestions, planned widgets drawn on the canvas, activity panel, inline API-key dialog, settings dialog, theme store. 115 unit and component tests, axe clean on four views, 10 Playwright tests, 4 visual baselines. Real-browser review found and fixed: stale hit-test polygons when the image loaded after the objects, theme not applied on the landing page after reload, duplicate accessible name on the file input. Not done: Lighthouse score (no Lighthouse run yet); visual baselines are macOS-only.
+- 2026-11-14: Phase 6 done. Slider, control-point and multi-handle widgets (DOM handles over the canvas: draggable, keyboard-operable, labelled), a typed widget registry, constraints and snapping, per-object-and-property pending edits with a reset list, and a live mask-cut mesh preview using exact stretch (slider) and affine Moving Least Squares (points) with a smooth background patch. 210 unit and component tests, 19 Playwright tests, 6 visual baselines, axe clean including the editing state. Measured deformation at 0.15 ms per frame. A real-browser look found two layout problems fixed before finishing: controls hidden under the floating menu (the image now fits clear of the panels) and the selection outline not following the warp. Apply is intentionally disabled until Phase 7. Frame rate under real GPU rendering was not measured (the headless browser uses software rendering).

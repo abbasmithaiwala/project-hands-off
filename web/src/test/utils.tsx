@@ -25,7 +25,7 @@ export function mockFetch(routes: Routes) {
     calls.push({ key, request })
     const handler = routes[key]
     if (!handler) return apiError('not_found', `no route for ${key}`, 404)
-    const result = handler(request)
+    const result = await handler(request)
     return result instanceof Response ? result : json(result)
   })
   return { fetch: fetchMock as unknown as typeof fetch, calls }
@@ -84,7 +84,7 @@ export function fakeStage() {
     setImage: vi.fn(async () => ({ width: 1200, height: 800 })),
     setObjects: vi.fn(),
     setHighlight: vi.fn(),
-    setWidget: vi.fn(),
+    setPreview: vi.fn(),
     fit: vi.fn(),
     zoomBy: vi.fn(),
     destroy: vi.fn(),

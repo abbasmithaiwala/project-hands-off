@@ -14,6 +14,16 @@ describe('fitViewport', () => {
     expect(view).toMatchObject({ x: 50, y: 50 })
   })
 
+  it('reserves different space on each side and centres in what is left', () => {
+    const view = fitViewport(
+      { width: 100, height: 100 },
+      { width: 400, height: 400 },
+      { top: 100, right: 0, bottom: 100, left: 0 },
+    )
+    expect(view.scale).toBe(2)
+    expect(view).toMatchObject({ x: 100, y: 100 })
+  })
+
   it('never produces a zero or negative scale for tiny containers', () => {
     const view = fitViewport({ width: 100, height: 100 }, { width: 10, height: 10 }, 50)
     expect(view.scale).toBeGreaterThan(0)
