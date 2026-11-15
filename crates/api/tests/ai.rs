@@ -20,6 +20,17 @@ const SUGGESTIONS: &str = r#"{"properties":[
     {"key":"shape","label":"Seat shape","widget":"control_points"},
     {"key":"arms","label":"Arm position","widget":"multi_handle"}]}"#;
 
+const TRANSFORM_SUGGESTIONS: &str = r#"{"properties":[
+    {"key":"tilt","label":"Tilt","widget":"rotate"},
+    {"key":"size","label":"Size","widget":"scale"},
+    {"key":"position","label":"Position","widget":"move"}]}"#;
+
+fn rotate() -> String {
+    json!({ "kind": "rotate", "axis": null, "pivot": {"x": 0.5, "y": 0.9}, "handle": {"x": 0.5, "y": 0.1},
+            "min": -45.0, "max": 45.0, "initial": null, "points": null, "handles": null })
+    .to_string()
+}
+
 fn slider(start_x: f32) -> String {
     json!({ "kind": "slider", "axis": { "start": {"x": start_x, "y": 0.5}, "end": {"x": 0.9, "y": 0.5} },
             "min": 0.5, "max": 1.5, "initial": 1.0, "points": null, "handles": null })
@@ -195,7 +206,15 @@ async fn two_unusable_suggestions_fall_back_to_generic_properties() {
         .iter()
         .map(|p| p["key"].clone())
         .collect();
-    assert_eq!(keys, [json!("size"), json!("shape")]);
+    assert_eq!(
+        keys,
+        [
+            json!("size"),
+            json!("position"),
+            json!("tilt"),
+            json!("shape")
+        ]
+    );
 }
 
 #[tokio::test]
@@ -221,6 +240,57 @@ async fn widgets_are_mapped_from_crop_to_image_coordinates_and_cached() {
     let again = post_json(&app, &widget_path(&id), &json!({ "property": "length" })).await;
     assert_eq!(again.json(), widget);
     assert_eq!(mock.requests().len(), 2);
+}
+
+#[tokio::test]
+async fn a_tilt_is_planned_by_the_model_as_a_ring_and_mapped_into_the_image() {
+    let (app, mock) = app_with_ai().await;
+    mock.push_ok(TRANSFORM_SUGGESTIONS);
+    mock.push_ok(rotate());
+    let id = analysed_image(&app).await;
+
+    let widget = post_json(&app, &widget_path(&id), &json!({ "property": "tilt" }))
+        .await
+        .json();
+
+    assert_eq!(widget["kind"], "rotate");
+    // The crop spans 0.2..0.8, so crop y 0.9 and 0.1 map to 0.74 and 0.26.
+    let y = |name: &str| widget[name]["y"].as_f64().unwrap();
+    assert!((y("pivot") - 0.74).abs() < 1e-3 && (y("handle") - 0.26).abs() < 1e-3);
+    assert_eq!(
+        (widget["min"].clone(), widget["max"].clone()),
+        (json!(-45.0), json!(45.0))
+    );
+    assert!(mock.requests()[1].user_text.contains("Widget: rotate"));
+}
+
+#[tokio::test]
+async fn resizing_and_moving_are_placed_from_the_object_box_without_asking_a_model() {
+    let (app, mock) = app_with_ai().await;
+    mock.push_ok(TRANSFORM_SUGGESTIONS);
+    let id = analysed_image(&app).await;
+
+    let scale = post_json(&app, &widget_path(&id), &json!({ "property": "size" }))
+        .await
+        .json();
+    assert_eq!(scale["kind"], "scale");
+    // Anchored at the box centre with the handle on its top-right corner.
+    assert_eq!(
+        (
+            scale["axis"]["start"]["x"].clone(),
+            scale["axis"]["end"]["x"].clone()
+        ),
+        (json!(0.5), json!(0.75))
+    );
+    assert_eq!(scale["axis"]["end"]["y"], json!(0.25));
+
+    let moved = post_json(&app, &widget_path(&id), &json!({ "property": "position" }))
+        .await
+        .json();
+    assert_eq!(moved["kind"], "move");
+    assert_eq!(moved["handle"], json!({ "x": 0.5, "y": 0.5 }));
+
+    assert_eq!(mock.requests().len(), 1, "only the suggestions were asked");
 }
 
 #[tokio::test]

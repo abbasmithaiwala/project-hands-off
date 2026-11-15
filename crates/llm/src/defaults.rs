@@ -6,6 +6,10 @@ use hands_off_core::model::{Axis, DetectedObject, Property, Widget, WidgetKind};
 
 const MAX_DEFAULT_POINTS: usize = 12;
 const SLIDER_RANGE: (f32, f32, f32) = (0.5, 1.5, 1.0);
+const SCALE_RANGE: (f32, f32, f32) = (0.5, 2.0, 1.0);
+const ROTATE_RANGE_DEGREES: f32 = 45.0;
+/// The smallest ring a rotate handle may sit on (image units), so it never covers its pivot.
+const MIN_RING_RADIUS: f32 = 0.06;
 
 /// Generic properties that make sense for almost any object.
 #[must_use]
@@ -14,7 +18,17 @@ pub fn default_properties() -> Vec<Property> {
         Property {
             key: "size".into(),
             label: "Size".into(),
-            widget: WidgetKind::Slider,
+            widget: WidgetKind::Scale,
+        },
+        Property {
+            key: "position".into(),
+            label: "Position".into(),
+            widget: WidgetKind::Move,
+        },
+        Property {
+            key: "tilt".into(),
+            label: "Tilt".into(),
+            widget: WidgetKind::Rotate,
         },
         Property {
             key: "shape".into(),
@@ -100,6 +114,22 @@ pub fn corner_points(outline: &[NormalizedPoint], max_points: usize) -> Vec<Norm
     }
 }
 
+/// A handle `radius` away from `pivot`, above it when that fits in the image and otherwise to
+/// the side or below, so the ring is always fully usable.
+fn ring_handle(pivot: NormalizedPoint, radius: f32) -> NormalizedPoint {
+    let radius = radius.max(MIN_RING_RADIUS);
+    let fits = |p: (f32, f32)| (0.0..=1.0).contains(&p.0) && (0.0..=1.0).contains(&p.1);
+    [
+        (pivot.x, pivot.y - radius),
+        (pivot.x + radius, pivot.y),
+        (pivot.x - radius, pivot.y),
+        (pivot.x, pivot.y + radius),
+    ]
+    .into_iter()
+    .find(|&p| fits(p))
+    .map_or_else(|| point(pivot.x, pivot.y - radius), |(x, y)| point(x, y))
+}
+
 /// A sensible widget of `kind` placed from the object's box and outline.
 #[must_use]
 pub fn default_widget(kind: WidgetKind, property_key: &str, object: &DetectedObject) -> Widget {
@@ -140,6 +170,27 @@ pub fn default_widget(kind: WidgetKind, property_key: &str, object: &DetectedObj
             }
             Widget::ControlPoints { points }
         }
+        WidgetKind::Rotate => {
+            let pivot = point(cx, cy);
+            Widget::Rotate {
+                pivot,
+                handle: ring_handle(pivot, b.height / 2.0 + MIN_RING_RADIUS / 2.0),
+                min: -ROTATE_RANGE_DEGREES,
+                max: ROTATE_RANGE_DEGREES,
+            }
+        }
+        WidgetKind::Scale => Widget::Scale {
+            axis: Axis {
+                start: point(cx, cy),
+                end: point(b.x + b.width, b.y),
+            },
+            min: SCALE_RANGE.0,
+            max: SCALE_RANGE.1,
+            initial: SCALE_RANGE.2,
+        },
+        WidgetKind::Move => Widget::Move {
+            handle: point(cx, cy),
+        },
         WidgetKind::MultiHandle => Widget::MultiHandle {
             handles: vec![
                 point(cx, b.y),
@@ -178,9 +229,60 @@ mod tests {
     }
 
     #[test]
-    fn default_properties_cover_a_slider_and_a_shape() {
+    fn default_properties_cover_size_position_tilt_and_shape_each_with_its_own_control() {
         let kinds: Vec<_> = default_properties().iter().map(|p| p.widget).collect();
-        assert_eq!(kinds, [WidgetKind::Slider, WidgetKind::ControlPoints]);
+        assert_eq!(
+            kinds,
+            [
+                WidgetKind::Scale,
+                WidgetKind::Move,
+                WidgetKind::Rotate,
+                WidgetKind::ControlPoints
+            ]
+        );
+    }
+
+    #[test]
+    fn a_rotate_ring_sits_above_the_pivot_and_stays_inside_the_image() {
+        let Widget::Rotate {
+            pivot,
+            handle,
+            min,
+            max,
+        } = default_widget(WidgetKind::Rotate, "tilt", &object(8))
+        else {
+            panic!()
+        };
+        assert!((handle.x - pivot.x).abs() < 1e-6 && handle.y < pivot.y);
+        assert!(min < 0.0 && max > 0.0);
+
+        let mut tall = object(8);
+        tall.bbox = BBox::new(0.0, 0.0, 1.0, 1.0).unwrap();
+        let Widget::Rotate { pivot, handle, .. } =
+            default_widget(WidgetKind::Rotate, "tilt", &tall)
+        else {
+            panic!()
+        };
+        assert!((0.0..=1.0).contains(&handle.x) && (0.0..=1.0).contains(&handle.y));
+        assert!((handle.x - pivot.x).hypot(handle.y - pivot.y) >= MIN_RING_RADIUS - 1e-6);
+    }
+
+    #[test]
+    fn scale_resizes_about_the_centre_from_a_corner_and_move_starts_at_the_centre() {
+        let Widget::Scale { axis, initial, .. } =
+            default_widget(WidgetKind::Scale, "size", &object(8))
+        else {
+            panic!()
+        };
+        assert!((axis.start.x - 0.45).abs() < 1e-6 && (axis.start.y - 0.5).abs() < 1e-6);
+        assert!((axis.end.x - 0.7).abs() < 1e-6 && (axis.end.y - 0.3).abs() < 1e-6);
+        assert!((initial - 1.0).abs() < f32::EPSILON);
+
+        let Widget::Move { handle } = default_widget(WidgetKind::Move, "position", &object(8))
+        else {
+            panic!()
+        };
+        assert!((handle.x - 0.45).abs() < 1e-6 && (handle.y - 0.5).abs() < 1e-6);
     }
 
     #[test]

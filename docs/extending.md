@@ -5,13 +5,15 @@ runtime surprise. Keep the change small, add tests, and update the docs in the s
 
 ## A new widget type
 
-A widget is a control drawn on the canvas for one kind of property (slider, control points, handles).
+A widget is a control drawn on the canvas for one kind of property (slider, control points, handles, rotate, scale, move). Rotate, scale and move are the most recent worked example: [ADR 0014](adr/0014-controls-that-match-the-change.md).
 
 1. **Core.** Add the variant to `WidgetKind`, to `Widget` (its geometry) and to `EditChange` (what the user did)
    in `crates/core/src/model.rs`. Add checks for the new edit in `check_change` in `crates/api/src/edit.rs`.
 2. **Planning.** Handle the new kind where widget plans are parsed (`parse_widget` in `crates/llm/src/contracts.rs`)
-   and give it a deterministic fallback in `crates/llm/src/defaults.rs`. Describe it in `prompts/planner.v1.md`
-   (bump the prompt version, which also invalidates cached plans).
+   and give it a deterministic fallback in `crates/llm/src/defaults.rs`. Describe it in a new `prompts/planner.vN.md`
+   (never edit a shipped version; bump `PLANNER_PROMPT_VERSION`, which also invalidates cached plans). A control that
+   is fully determined by the object's box or outline needs no model call: handle it before the model in `plan`
+   (`crates/api/src/ai.rs`), as scale, move and control points are.
 3. **Telling the model.** Say how the edit is described in words (`describe_edit`) and, if it needs a different
    reference image, how it is drawn (`web/src/lib/guide.ts`) and prompted (`prompts/`).
 4. **Contract.** Run `just gen-api`. The TypeScript types now include the new kind.
@@ -23,7 +25,7 @@ A widget is a control drawn on the canvas for one kind of property (slider, cont
 ## A new property pack
 
 Properties are suggested per object by a model, with `default_properties` as the fallback. To make particular
-objects better served, adjust `prompts/suggester.v1.md` (give examples for the object classes you care about) and,
+objects better served, adjust the latest `prompts/suggester.vN.md` (give examples for the object classes you care about) and,
 for objects that should always offer certain properties, extend `default_properties` in `crates/llm/src/defaults.rs`
 keyed on the object's label. Bump the suggester prompt version so cached suggestions are refreshed.
 

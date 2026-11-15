@@ -63,3 +63,8 @@ export function screenToImage(view: Viewport, point: Point): Point {
 export function imageToScreen(view: Viewport, point: Point): Point {
   return { x: point.x * view.scale + view.x, y: point.y * view.scale + view.y }
 }
+
+/** Where a point given as a share of the image (`0..1`) appears on screen. */
+export function normalisedToScreen(view: Viewport, size: Size, point: Point): Point {
+  return imageToScreen(view, { x: point.x * size.width, y: point.y * size.height })
+}

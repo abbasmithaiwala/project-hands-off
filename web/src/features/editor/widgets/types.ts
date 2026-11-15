@@ -1,4 +1,4 @@
-import type { EditChange, Widget } from '@/api/client'
+import type { BBox, EditChange, Widget } from '@/api/client'
 import type { Point } from '@/lib/geometry'
 import type { Size, Viewport } from '@/lib/viewport'
 
@@ -6,6 +6,8 @@ import type { Size, Viewport } from '@/lib/viewport'
 export interface WidgetContext {
   view: Viewport
   imageSize: Size
+  /** The edited object's box, so a control can draw the frame that follows the edit. */
+  objectBox: BBox
   /** How far (in image pixels) a point may travel from where it started. */
   reach: number
   /** Convert a pointer position to a normalised image point. */

@@ -9,6 +9,7 @@ const idle: HintContext = {
   hasSelection: false,
   hasActiveWidget: false,
   hasPendingEdits: false,
+  widgetKind: null,
 }
 
 beforeEach(() => window.localStorage.clear())
@@ -29,6 +30,17 @@ describe('HintBanner', () => {
     rerender(<HintBanner context={{ ...idle, hasSelection: true, hasActiveWidget: true }} />)
     expect(readDoneHints().has('pick-object')).toBe(true)
     expect(screen.getByRole('status')).toHaveTextContent('Drag the handle')
+  })
+
+  it('words the drag tip for the control on screen', () => {
+    render(
+      <HintBanner
+        context={{ ...idle, hasSelection: true, hasActiveWidget: true, widgetKind: 'rotate' }}
+      />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Drag the handle around the ring to turn it.',
+    )
   })
 
   it('does not show tips that were already finished', () => {

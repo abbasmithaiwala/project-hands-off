@@ -42,7 +42,68 @@ function pending(objectId: number, widget: Widget, change: EditChange): PendingE
   }
 }
 
+const tilt: Widget = {
+  kind: 'rotate',
+  pivot: { x: 0.5, y: 0.8 },
+  handle: { x: 0.5, y: 0.2 },
+  min: -45,
+  max: 45,
+}
+
+const grow: Widget = {
+  kind: 'scale',
+  axis: { start: { x: 0.4, y: 0.4 }, end: { x: 0.7, y: 0.2 } },
+  min: 0.5,
+  max: 2,
+  initial: 1,
+}
+
+const carry: Widget = { kind: 'move', handle: { x: 0.45, y: 0.45 } }
+
 describe('deformationFor', () => {
+  it('turns the object clockwise about the pivot in pixel space', () => {
+    const pivot = { x: 0.5, y: 0.8 }
+    const deform = deformationFor(tilt, { kind: 'rotate', degrees: 90, pivot }, size, bbox)
+    // The pivot is at (500, 400). A point 100px straight above it swings 100px to the right.
+    const moved = deform?.({ x: 500, y: 300 })
+    expect(moved?.x).toBeCloseTo(600)
+    expect(moved?.y).toBeCloseTo(400)
+    const fixed = deform?.({ x: 500, y: 400 })
+    expect(fixed?.x).toBeCloseTo(500)
+    expect(fixed?.y).toBeCloseTo(400)
+  })
+
+  it('resizes evenly about the anchor in both directions', () => {
+    const deform = deformationFor(
+      grow,
+      { kind: 'scale', value: 1.5, pivot: { x: 0.4, y: 0.4 } },
+      size,
+      bbox,
+    )
+    // The anchor is at (400, 200): a point 100 right and 50 below it moves to 150 and 75.
+    expect(deform?.({ x: 500, y: 250 })).toEqual({ x: 550, y: 275 })
+    expect(deform?.({ x: 400, y: 200 })).toEqual({ x: 400, y: 200 })
+  })
+
+  it('carries the object by the same share of the image width and height', () => {
+    const deform = deformationFor(carry, { kind: 'move', dx: 0.1, dy: -0.2 }, size, bbox)
+    expect(deform?.({ x: 300, y: 300 })).toEqual({ x: 400, y: 200 })
+  })
+
+  it('ignores transforms left at their starting value', () => {
+    const pivot = { x: 0.5, y: 0.5 }
+    expect(deformationFor(tilt, { kind: 'rotate', degrees: 0, pivot }, size, bbox)).toBeNull()
+    expect(deformationFor(grow, { kind: 'scale', value: 1, pivot }, size, bbox)).toBeNull()
+    expect(deformationFor(carry, { kind: 'move', dx: 0, dy: 0 }, size, bbox)).toBeNull()
+  })
+
+  it('refuses a change that does not belong to the widget', () => {
+    expect(deformationFor(slider, { kind: 'move', dx: 0.1, dy: 0 }, size, bbox)).toBeNull()
+    expect(
+      deformationFor(carry, { kind: 'rotate', degrees: 20, pivot: { x: 0.5, y: 0.5 } }, size, bbox),
+    ).toBeNull()
+  })
+
   it('stretches along the slider axis in pixel space', () => {
     const deform = deformationFor(slider, { kind: 'slider', value: 0.5 }, size, bbox)
     // Axis runs from x=200 to x=700 at y=250; halving it moves the far end to x=450.
@@ -129,6 +190,18 @@ describe('buildPreviews', () => {
     )
     expect(reshape?.spec.showPixels).toBe(false)
     expect(reshape?.spec.deform).not.toBeNull()
+  })
+
+  it('moves pixels for every control that carries the object as a whole', () => {
+    const pivot = { x: 0.5, y: 0.8 }
+    for (const edit of [
+      pending(0, tilt, { kind: 'rotate', degrees: 20, pivot }),
+      pending(0, grow, { kind: 'scale', value: 1.3, pivot }),
+      pending(0, carry, { kind: 'move', dx: 0.1, dy: 0 }),
+    ]) {
+      const [preview] = buildPreviews([edit], objects, size, maskUrl)
+      expect(preview?.spec.showPixels, edit.widget.kind).toBe(true)
+    }
   })
 
   it('returns nothing without edits', () => {

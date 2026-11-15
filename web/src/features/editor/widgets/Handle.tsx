@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import type { Point } from '@/lib/geometry'
 import { imageToScreen } from '@/lib/viewport'
@@ -15,6 +15,10 @@ interface HandleProps {
   /** ARIA role: `slider` for single-value controls, otherwise a plain button. */
   role?: 'slider' | 'button'
   ariaValue?: { min: number; max: number; now: number }
+  /** What assistive technology calls the control, for example "rotation handle". */
+  roleDescription?: string
+  /** An icon drawn on the disc that shows what dragging does. Without one the handle is a dot. */
+  glyph?: ReactNode
   moved: boolean
   onDrag: (clientX: number, clientY: number, modifiers: { shift: boolean }) => void
   /** Arrow-key nudge: direction in `-1..1` per axis, and whether the fine step was asked for. */
@@ -37,6 +41,8 @@ export function Handle({
   valueText,
   role = 'button',
   ariaValue,
+  roleDescription = 'draggable handle',
+  glyph,
   moved,
   onDrag,
   onNudge,
@@ -81,12 +87,17 @@ export function Handle({
   return (
     <div
       ref={element}
-      className={cn(styles.handle, dragging && styles.dragging, moved && styles.moved)}
+      className={cn(
+        styles.handle,
+        glyph !== undefined && styles.withGlyph,
+        dragging && styles.dragging,
+        moved && styles.moved,
+      )}
       style={{ left: screen.x, top: screen.y }}
       tabIndex={0}
       role={role}
       aria-label={label}
-      aria-roledescription="draggable handle"
+      aria-roledescription={roleDescription}
       {...(valueText ? { 'aria-valuetext': valueText } : {})}
       {...(role === 'slider' && ariaValue
         ? {
@@ -101,6 +112,12 @@ export function Handle({
       onPointerCancel={stopDragging}
       onKeyDown={onKeyDown}
       data-testid="widget-handle"
-    />
+    >
+      {glyph !== undefined && (
+        <span className={styles.glyph} aria-hidden="true">
+          {glyph}
+        </span>
+      )}
+    </div>
   )
 }

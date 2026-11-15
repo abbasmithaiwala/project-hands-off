@@ -181,8 +181,12 @@ async fn plan(
     object: &DetectedObject,
     property: &Property,
 ) -> Result<Widget> {
-    // A reshape control is the object's own outline reduced to its corners; no model needed.
-    if property.widget == WidgetKind::ControlPoints {
+    // These controls are fully determined by the object's own geometry (its outline reduced to
+    // corners, or its box), so no model call is needed.
+    if matches!(
+        property.widget,
+        WidgetKind::ControlPoints | WidgetKind::Scale | WidgetKind::Move
+    ) {
         return Ok(default_widget(property.widget, &property.key, object));
     }
     let region = CropRegion::around(&object.bbox, CROP_PADDING);

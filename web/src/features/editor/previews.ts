@@ -5,7 +5,10 @@ import {
   dragControlPoints,
   objectRegion,
   PREVIEW_MARGIN,
+  rotateAbout,
+  scaleAbout,
   stretchAlongAxis,
+  translate,
   type Deformation,
 } from '@/lib/warp'
 import type { Point } from '@/lib/geometry'
@@ -16,6 +19,11 @@ import type { PreviewSpec } from './canvas/stage'
 
 const toPixels = (p: Point, size: Size): Point => ({ x: p.x * size.width, y: p.y * size.height })
 
+/** Edits that move the object's own pixels as a whole, so the warped picture is a fair preview. */
+const KEEPS_PIXELS: ReadonlySet<Widget['kind']> = new Set(['slider', 'scale', 'rotate', 'move'])
+
+const RADIANS_PER_DEGREE = Math.PI / 180
+
 /** How an edit moves the object's pixels, or `null` if the change does not fit the widget. */
 export function deformationFor(
   widget: Widget,
@@ -24,22 +32,37 @@ export function deformationFor(
   bbox: BBox,
 ): Deformation | null {
   if (isUnchanged(change, widget)) return null
-  if (change.kind === 'slider' && widget.kind === 'slider') {
-    return stretchAlongAxis(
-      toPixels(widget.axis.start, size),
-      toPixels(widget.axis.end, size),
-      change.value / widget.initial,
-    )
+  switch (change.kind) {
+    case 'slider':
+      return widget.kind === 'slider'
+        ? stretchAlongAxis(
+            toPixels(widget.axis.start, size),
+            toPixels(widget.axis.end, size),
+            change.value / widget.initial,
+          )
+        : null
+    case 'scale':
+      return widget.kind === 'scale'
+        ? scaleAbout(toPixels(widget.axis.start, size), change.value / widget.initial)
+        : null
+    case 'rotate':
+      return widget.kind === 'rotate'
+        ? rotateAbout(toPixels(change.pivot, size), change.degrees * RADIANS_PER_DEGREE)
+        : null
+    case 'move':
+      return widget.kind === 'move'
+        ? translate(change.dx * size.width, change.dy * size.height)
+        : null
+    case 'control_points':
+    case 'multi_handle':
+      return widget.kind === change.kind
+        ? dragControlPoints(
+            change.origin.map((p) => toPixels(p, size)),
+            change.target.map((p) => toPixels(p, size)),
+            pinPoints(bbox, size),
+          )
+        : null
   }
-  if (change.kind !== 'slider' && widget.kind !== 'slider' && change.kind === widget.kind) {
-    const pins = pinPoints(bbox, size)
-    return dragControlPoints(
-      change.origin.map((p) => toPixels(p, size)),
-      change.target.map((p) => toPixels(p, size)),
-      pins,
-    )
-  }
-  return null
 }
 
 function pinPoints(bbox: BBox, size: Size): Point[] {
@@ -84,7 +107,7 @@ export function buildPreviews(
         bbox: object.bbox,
         maskUrl: maskUrl(object.id),
         deform: compose(deformations),
-        showPixels: mine.every((e) => e.widget.kind === 'slider'),
+        showPixels: mine.every((e) => KEEPS_PIXELS.has(e.widget.kind)),
       },
     })
   }

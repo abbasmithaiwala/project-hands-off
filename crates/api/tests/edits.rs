@@ -569,12 +569,32 @@ async fn malformed_edits_fail_immediately_with_a_clear_message_and_cost_nothing(
         (
             "zero slider",
             json!({ "edits": [edit(slider(0.0), 0, "length")] }),
-            "slider value",
+            "multiplier",
         ),
         (
             "huge slider",
             json!({ "edits": [edit(slider(9.0), 0, "length")] }),
-            "slider value",
+            "multiplier",
+        ),
+        (
+            "zero scale",
+            json!({ "edits": [edit(json!({ "kind": "scale", "value": 0.0, "pivot": point }), 0, "size")] }),
+            "multiplier",
+        ),
+        (
+            "rotation beyond a half turn",
+            json!({ "edits": [edit(json!({ "kind": "rotate", "degrees": 270.0, "pivot": point }), 0, "tilt")] }),
+            "-180 and 180",
+        ),
+        (
+            "rotation without a pivot",
+            json!({ "edits": [edit(json!({ "kind": "rotate", "degrees": 10.0 }), 0, "tilt")] }),
+            "",
+        ),
+        (
+            "move beyond the image",
+            json!({ "edits": [edit(json!({ "kind": "move", "dx": 1.5, "dy": 0.0 }), 0, "position")] }),
+            "one image width",
         ),
         (
             "mismatched points",

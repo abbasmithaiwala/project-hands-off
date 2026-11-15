@@ -1262,6 +1262,67 @@
                 "description": "Positions after the edit."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The object turned about `pivot`.",
+            "required": ["degrees", "pivot", "kind"],
+            "properties": {
+              "degrees": {
+                "type": "number",
+                "format": "float",
+                "description": "Clockwise turn in degrees as seen in the photo; negative is anticlockwise."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["rotate"]
+              },
+              "pivot": {
+                "$ref": "#/components/schemas/NormalizedPoint",
+                "description": "The point the object turned about, so the edit can be put in words."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The whole object resized evenly about `pivot`.",
+            "required": ["value", "pivot", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["scale"]
+              },
+              "pivot": {
+                "$ref": "#/components/schemas/NormalizedPoint",
+                "description": "The anchor that stayed fixed, so the edit can be put in words."
+              },
+              "value": {
+                "type": "number",
+                "format": "float",
+                "description": "New size as a multiplier (`1.0` is unchanged)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The whole object moved, as a share of the image's width and height.",
+            "required": ["dx", "dy", "kind"],
+            "properties": {
+              "dx": {
+                "type": "number",
+                "format": "float",
+                "description": "Rightward shift as a fraction of the image width; negative is leftward."
+              },
+              "dy": {
+                "type": "number",
+                "format": "float",
+                "description": "Downward shift as a fraction of the image height; negative is upward."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["move"]
+              }
+            }
           }
         ],
         "description": "The change a user made with a widget."
@@ -1869,6 +1930,80 @@
                 "enum": ["multi_handle"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A handle on a ring around `pivot`; dragging it around the ring turns the object.",
+            "required": ["pivot", "handle", "min", "max", "kind"],
+            "properties": {
+              "handle": {
+                "$ref": "#/components/schemas/NormalizedPoint",
+                "description": "Where the handle rests. Its distance from `pivot` is the ring's radius and its\ndirection is the zero angle."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["rotate"]
+              },
+              "max": {
+                "type": "number",
+                "format": "float",
+                "description": "Furthest clockwise turn, in degrees (positive)."
+              },
+              "min": {
+                "type": "number",
+                "format": "float",
+                "description": "Furthest anticlockwise turn, in degrees (negative)."
+              },
+              "pivot": {
+                "$ref": "#/components/schemas/NormalizedPoint",
+                "description": "The point the object turns about, which stays fixed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A handle that resizes the whole object evenly about a fixed anchor.",
+            "required": ["axis", "min", "max", "initial", "kind"],
+            "properties": {
+              "axis": {
+                "$ref": "#/components/schemas/Axis",
+                "description": "`start` is the anchor that stays fixed; `end` is where the handle rests."
+              },
+              "initial": {
+                "type": "number",
+                "format": "float",
+                "description": "Starting multiplier, normally `1.0`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["scale"]
+              },
+              "max": {
+                "type": "number",
+                "format": "float",
+                "description": "Largest allowed multiplier."
+              },
+              "min": {
+                "type": "number",
+                "format": "float",
+                "description": "Smallest allowed multiplier."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A handle that moves the whole object without changing its shape.",
+            "required": ["handle", "kind"],
+            "properties": {
+              "handle": {
+                "$ref": "#/components/schemas/NormalizedPoint",
+                "description": "Where the handle rests, on the object."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["move"]
+              }
+            }
           }
         ],
         "description": "Placement and geometry of a control on the canvas."
@@ -1876,7 +2011,7 @@
       "WidgetKind": {
         "type": "string",
         "description": "The kind of on-canvas control used to edit a property.",
-        "enum": ["slider", "control_points", "multi_handle"]
+        "enum": ["slider", "control_points", "multi_handle", "rotate", "scale", "move"]
       }
     }
   },

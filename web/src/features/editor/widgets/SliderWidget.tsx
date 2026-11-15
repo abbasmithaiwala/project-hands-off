@@ -1,5 +1,5 @@
 import { clamp } from '@/lib/numbers'
-import { imageToScreen } from '@/lib/viewport'
+import { normalisedToScreen } from '@/lib/viewport'
 import { describeChange, sliderHandlePoint, sliderValueAt } from '@/lib/widgetMath'
 import { Handle } from './Handle'
 import type { WidgetProps } from './types'
@@ -22,8 +22,7 @@ export function SliderWidget({
   const { imageSize, view } = context
   const value = change?.value ?? widget.initial
   const handle = sliderHandlePoint(widget, value, imageSize)
-  const toScreen = (p: { x: number; y: number }) =>
-    imageToScreen(view, { x: p.x * imageSize.width, y: p.y * imageSize.height })
+  const toScreen = (p: { x: number; y: number }) => normalisedToScreen(view, imageSize, p)
   const start = toScreen(widget.axis.start)
   const now = toScreen(handle)
 

@@ -32,6 +32,7 @@ const MAX_POINTS: usize = 64;
 const MAX_PREVIEW_BYTES: usize = 12 * 1024 * 1024;
 const MODEL_IMAGE_MAX_SIDE: u32 = 1280;
 const MAX_SLIDER_VALUE: f32 = 4.0;
+const MAX_ROTATION_DEGREES: f32 = 180.0;
 /// Differences in proportions above this are reported in the activity log.
 const ASPECT_WARNING: f32 = 0.05;
 
@@ -57,11 +58,27 @@ pub struct StoredResult {
 fn check_change(index: usize, change: &EditChange) -> Result<()> {
     let invalid = |why: &str| Error::Validation(format!("edit {index}: {why}"));
     match change {
-        EditChange::Slider { value, .. } => {
+        EditChange::Slider { value, .. } | EditChange::Scale { value, .. } => {
             if value.is_finite() && *value > 0.0 && *value <= MAX_SLIDER_VALUE {
                 Ok(())
             } else {
-                Err(invalid("the slider value must be above 0 and at most 4"))
+                Err(invalid("the size multiplier must be above 0 and at most 4"))
+            }
+        }
+        EditChange::Rotate { degrees, .. } => {
+            if degrees.is_finite() && degrees.abs() <= MAX_ROTATION_DEGREES {
+                Ok(())
+            } else {
+                Err(invalid("the rotation must be between -180 and 180 degrees"))
+            }
+        }
+        EditChange::Move { dx, dy } => {
+            if dx.is_finite() && dy.is_finite() && dx.abs() <= 1.0 && dy.abs() <= 1.0 {
+                Ok(())
+            } else {
+                Err(invalid(
+                    "the move must be within one image width and height",
+                ))
             }
         }
         EditChange::ControlPoints { origin, target }

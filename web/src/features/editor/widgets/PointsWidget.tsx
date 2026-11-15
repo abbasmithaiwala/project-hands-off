@@ -1,6 +1,6 @@
 import type { EditChange, NormalizedPoint } from '@/api/client'
 import type { Point } from '@/lib/geometry'
-import { imageToScreen } from '@/lib/viewport'
+import { normalisedToScreen } from '@/lib/viewport'
 import { constrainPoint } from '@/lib/widgetMath'
 import { Handle } from './Handle'
 import type { WidgetContext } from './types'
@@ -40,8 +40,7 @@ export function PointsWidget({
   const { imageSize, view } = context
   const points = target ?? initial
 
-  const toScreen = (p: Point) =>
-    imageToScreen(view, { x: p.x * imageSize.width, y: p.y * imageSize.height })
+  const toScreen = (p: Point) => normalisedToScreen(view, imageSize, p)
   const emit = (next: readonly NormalizedPoint[]) =>
     onChange({ kind, origin: [...initial], target: [...next] } as EditChange)
 

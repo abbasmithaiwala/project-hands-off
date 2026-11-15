@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import type { EditChange, Widget } from '@/api/client'
+import type { BBox, EditChange, Widget } from '@/api/client'
 import { screenToImage, type Size, type Viewport } from '@/lib/viewport'
 import styles from './WidgetLayer.module.css'
 import { widgetRegistry } from './registry'
@@ -12,6 +12,8 @@ interface WidgetLayerProps {
   objectLabel: string
   view: Viewport
   imageSize: Size
+  /** The edited object's box, so controls can draw the frame that follows the edit. */
+  objectBox: BBox
   /** How far (in image pixels) a point may travel from where it started. */
   reach: number
   onChange: (change: EditChange | null) => void
@@ -25,6 +27,7 @@ export function WidgetLayer({
   objectLabel,
   view,
   imageSize,
+  objectBox,
   reach,
   onChange,
 }: WidgetLayerProps) {
@@ -42,7 +45,7 @@ export function WidgetLayer({
     [view, imageSize],
   )
 
-  const context: WidgetContext = { view, imageSize, reach, toImagePoint }
+  const context: WidgetContext = { view, imageSize, objectBox, reach, toImagePoint }
   const shared = { propertyLabel, objectLabel, context, onChange }
 
   return (
@@ -70,6 +73,27 @@ export function WidgetLayer({
         <widgetRegistry.multi_handle
           widget={widget}
           change={change?.kind === 'multi_handle' ? change : null}
+          {...shared}
+        />
+      )}
+      {widget.kind === 'rotate' && (
+        <widgetRegistry.rotate
+          widget={widget}
+          change={change?.kind === 'rotate' ? change : null}
+          {...shared}
+        />
+      )}
+      {widget.kind === 'scale' && (
+        <widgetRegistry.scale
+          widget={widget}
+          change={change?.kind === 'scale' ? change : null}
+          {...shared}
+        />
+      )}
+      {widget.kind === 'move' && (
+        <widgetRegistry.move
+          widget={widget}
+          change={change?.kind === 'move' ? change : null}
           {...shared}
         />
       )}

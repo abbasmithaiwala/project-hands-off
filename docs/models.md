@@ -37,13 +37,13 @@ A chosen model must accept image input and support structured outputs (JSON Sche
 Models propose; the server decides. Every answer is parsed against a strict schema, then validated:
 
 - **Suggestions**: keys must be snake_case, labels short, no duplicates; invalid entries are dropped.
-- **Widgets**: the kind must match; slider ranges must make sense; control points must spread out, handles must be distinct; all points are mapped from crop to image coordinates and pulled onto the object's mask.
+- **Widgets**: the kind must match; slider and scale ranges must make sense; a rotate handle must sit well away from its pivot, with a turn range that includes zero and spans at least 10 degrees; control points must spread out, handles must be distinct; all points are mapped from crop to image coordinates and pulled onto the object's mask.
 
 An unusable answer triggers one repair request that quotes the problem. If that also fails, a deterministic default is used (a generic property list, or a widget placed from the object's box and outline), so editing never dead-ends.
 
 ## Image generation
 
-The image model is given the original photo and, when available, the rough warped preview as a geometry reference, plus an instruction written by the summariser. Prompts are in [`prompts/`](../prompts) (`summariser.v2.md`, `generator-with-preview.v2.md`, `generator-with-outline.v2.md`, `generator-without-preview.v2.md`). The result is blended back into the original only inside the edited regions; see [ADR 0006](adr/0006-apply-pipeline.md).
+The image model is given the original photo and, when available, the rough warped preview as a geometry reference, plus an instruction written by the summariser. Prompts are in [`prompts/`](../prompts) (`suggester.v2.md`, `planner.v2.md`, `summariser.v3.md`, `generator-with-preview.v2.md`, `generator-with-outline.v2.md`, `generator-without-preview.v2.md`). The result is blended back into the original only inside the edited regions; see [ADR 0006](adr/0006-apply-pipeline.md).
 
 A model that declines (content policy) or answers in words instead of an image produces a `refused` error, which is not retried elsewhere.
 

@@ -451,6 +451,42 @@ export interface components {
           /** @description Positions after the edit. */
           target: components['schemas']['NormalizedPoint'][]
         }
+      | {
+          /**
+           * Format: float
+           * @description Clockwise turn in degrees as seen in the photo; negative is anticlockwise.
+           */
+          degrees: number
+          /** @enum {string} */
+          kind: 'rotate'
+          /** @description The point the object turned about, so the edit can be put in words. */
+          pivot: components['schemas']['NormalizedPoint']
+        }
+      | {
+          /** @enum {string} */
+          kind: 'scale'
+          /** @description The anchor that stayed fixed, so the edit can be put in words. */
+          pivot: components['schemas']['NormalizedPoint']
+          /**
+           * Format: float
+           * @description New size as a multiplier (`1.0` is unchanged).
+           */
+          value: number
+        }
+      | {
+          /**
+           * Format: float
+           * @description Rightward shift as a fraction of the image width; negative is leftward.
+           */
+          dx: number
+          /**
+           * Format: float
+           * @description Downward shift as a fraction of the image height; negative is upward.
+           */
+          dy: number
+          /** @enum {string} */
+          kind: 'move'
+        }
     /** @description A request to apply a batch of edits to an image. */
     EditRequest: {
       /** @description The edits, applied together in one generation. */
@@ -768,11 +804,59 @@ export interface components {
           /** @enum {string} */
           kind: 'multi_handle'
         }
+      | {
+          /**
+           * @description Where the handle rests. Its distance from `pivot` is the ring's radius and its
+           *     direction is the zero angle.
+           */
+          handle: components['schemas']['NormalizedPoint']
+          /** @enum {string} */
+          kind: 'rotate'
+          /**
+           * Format: float
+           * @description Furthest clockwise turn, in degrees (positive).
+           */
+          max: number
+          /**
+           * Format: float
+           * @description Furthest anticlockwise turn, in degrees (negative).
+           */
+          min: number
+          /** @description The point the object turns about, which stays fixed. */
+          pivot: components['schemas']['NormalizedPoint']
+        }
+      | {
+          /** @description `start` is the anchor that stays fixed; `end` is where the handle rests. */
+          axis: components['schemas']['Axis']
+          /**
+           * Format: float
+           * @description Starting multiplier, normally `1.0`.
+           */
+          initial: number
+          /** @enum {string} */
+          kind: 'scale'
+          /**
+           * Format: float
+           * @description Largest allowed multiplier.
+           */
+          max: number
+          /**
+           * Format: float
+           * @description Smallest allowed multiplier.
+           */
+          min: number
+        }
+      | {
+          /** @description Where the handle rests, on the object. */
+          handle: components['schemas']['NormalizedPoint']
+          /** @enum {string} */
+          kind: 'move'
+        }
     /**
      * @description The kind of on-canvas control used to edit a property.
      * @enum {string}
      */
-    WidgetKind: 'slider' | 'control_points' | 'multi_handle'
+    WidgetKind: 'slider' | 'control_points' | 'multi_handle' | 'rotate' | 'scale' | 'move'
   }
   responses: never
   parameters: never

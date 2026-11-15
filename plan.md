@@ -13,6 +13,8 @@ An open-source, self-hostable take on Adobe's *Project Hands On* (Adobe MAX Snea
 2. **User picks a property.** A second analysis pass positions a **dynamic UI widget** on the object. The widget type depends on the property:
    - **Control-point polygon**: bottle outline, drag corners to make a diamond.
    - **1-D slider / handle**: couch length, beer volume, burger height, with a handle at the object's edge.
+   - **Rotate ring**: tilt, lean, angle; a handle on a ring round a pivot (ADR 0014).
+   - **Resize and move handles**: overall size from a corner handle, position from a handle on the body (ADR 0014).
    - **Skeleton / puppet-warp points**: arm position (a "light version of puppet warp").
    - **Two independent handles**: left bicep small, right bicep large.
    - **3-D head mesh**: head orientation, rotate around.
@@ -43,7 +45,7 @@ The UI is **generated per image and per object by a VLM** rather than being hard
 ### MVP (v0.1)
 - Upload image, auto-detect and outline objects (hover to highlight, click to select).
 - Per-object property suggestions (VLM), exposed through the **standard typed REST API**; the optional Decisions API is added behind a Cargo feature / config toggle.
-- Three widget types: **control-point polygon**, **slider**, **multi-handle (puppet-warp-lite)**.
+- Six widget types: **control-point polygon**, **slider**, **multi-handle (puppet-warp-lite)**, **rotate**, **scale** and **move** (the last three added in ADR 0014 so each property gets the control that matches the change).
 - Live client-side warp preview.
 - Apply → image edit via OpenRouter → Accept / Cancel, undo / redo.
 - Batch several edits into one generation call.

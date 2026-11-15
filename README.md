@@ -29,8 +29,9 @@ Hands-Off brings that idea to everyone, as free software you run yourself.
 - **Point at things.** Hover a photo and every object lights up. Click one.
 - **Get controls that fit.** Hands-Off looks at the object and offers the changes that make sense for it
   ("couch length", "armrest shape", "bottle height"), each with the right kind of control.
-- **Drag.** A slider stretches an object, corner points reshape it, handles move its parts. It all happens
-  instantly in your browser, with no waiting and no network.
+- **Drag.** Every change gets the control that fits it: a ring turns an object (tilt), a corner handle resizes it, a
+  handle moves it, a slider stretches one dimension, corner points reshape it and handles pose its parts. It all
+  happens instantly in your browser, with no waiting and no network.
 - **Press Apply.** An image model turns your rough edit into a photoreal result. Only the area you changed is
   touched; every other pixel stays exactly as it was.
 - **Compare, then keep it.** Slide between before and after. Accept it as a new version, retry, or discard.

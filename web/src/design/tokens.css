@@ -21,6 +21,8 @@
   --color-canvas: #0c0c0e;
   --color-veil: rgba(14, 14, 17, 0.7);
   --color-glass: rgba(24, 24, 28, 0.55);
+  /* Dark ink for icons drawn on the white handles that sit over photos, in either theme. */
+  --color-photo-ink: #1b1b1f;
 
   --space-1: 4px;
   --space-2: 8px;

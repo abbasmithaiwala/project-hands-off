@@ -26,6 +26,26 @@
     background var(--duration-fast) var(--ease);
 }
 
+/* A handle with an icon: a larger disc so the icon reads. */
+.withGlyph::before {
+  inset: 3px;
+  background: #fff;
+}
+
+.glyph {
+  position: absolute;
+  inset: 3px;
+  display: grid;
+  place-items: center;
+  color: var(--color-photo-ink);
+  pointer-events: none;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.moved .glyph {
+  color: var(--color-accent-contrast);
+}
+
 /* The square that frames the handle you are about to grab. */
 .handle::after {
   content: '';

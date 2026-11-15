@@ -58,11 +58,16 @@ Picking a change places its control over the canvas. Controls are DOM elements o
 | `slider` | one handle on a line, resting at the object's edge | stretches the object along the line, anchored at the line's start | `{ kind: "slider", value }` (a multiplier, `1` = unchanged) |
 | `control_points` | handles joined into an outline | reshapes the object around the dragged point | `{ kind: "control_points", origin, target }` |
 | `multi_handle` | free-standing handles | moves parts independently, like puppet joints | `{ kind: "multi_handle", origin, target }` |
+| `rotate` | a handle on a ring round a pivot, a wedge showing the turn, a tick at each limit | turns the object about the pivot (clockwise is positive) | `{ kind: "rotate", degrees, pivot }` |
+| `scale` | a corner handle joined to a fixed anchor by a thin line | resizes the whole object evenly about the anchor | `{ kind: "scale", value, pivot }` (a multiplier, `1` = unchanged) |
+| `move` | one handle on the object's body, an arrow back to where it started | carries the whole object, shape and size unchanged | `{ kind: "move", dx, dy }` (shares of the image width and height) |
+
+The slider, rotate, scale and move controls also draw a dashed frame round the object that follows the edit, with a faint copy of where it started, so the effect of a drag reads at a glance. Handles with a single meaning carry an icon (a turn arrow, a resize arrow, a move cross); the tip shown on first use is worded for the control on screen.
 
 All coordinates are normalised to the image, so an edit means the same thing at any zoom or resolution. The component for each kind lives in `features/editor/widgets/` and is registered in `registry.ts`; a `satisfies` clause makes the compiler fail if the API gains a widget kind without one.
 
 - **Constraints.** Points stay inside the image and within a fraction of the object's size of where they started. Dropping a point almost where it began snaps it back. Holding Shift locks a drag to one axis.
-- **Keyboard.** Arrow keys move a focused handle (1% of the image; sliders 5%); Shift gives fine steps (0.1%; sliders 1%); Home resets it. Handles announce their label and position, for example "Shape point 3 of 8 on couch, 42 percent across, 61 percent down".
+- **Keyboard.** Arrow keys move a focused handle (1% of the image; sliders and resize 5%; rotate 5 degrees, right or up turns clockwise); Shift gives fine steps (0.1%; sliders and resize 1%; rotate 1 degree); Home resets it. Handles announce their label and position, for example "Shape point 3 of 8 on couch, 42 percent across, 61 percent down".
 - **Pending edits.** One edit per object and property, kept when the user switches property or object. The action bar lists them, each with a reset button; a control dragged back to where it started removes its edit. Cancel clears everything.
 - **Apply** captures what is on screen (the photo with the warped previews, without outlines or controls) and sends it with the typed edits and the areas they affect. Editing is locked while it runs.
 
@@ -78,12 +83,12 @@ All coordinates are normalised to the image, so an edit means the same thing at 
 Dragging shows an approximate preview straight away, with no network call, and says so on screen.
 
 1. When an object is first edited, its mask is fetched and used to cut the object out of the photo (a texture), and a low-resolution, smoothly filled patch is built to cover the spot it leaves behind.
-2. The cutout is mapped onto a 28 x 28 grid mesh. Each drag recomputes the vertex positions: sliders stretch along the axis; points use affine Moving Least Squares (Schaefer et al., 2006), which passes exactly through every dragged point and is smooth in between. Eight pins around the object keep the warp local.
+2. The cutout is mapped onto a 28 x 28 grid mesh. Each drag recomputes the vertex positions: sliders stretch along the axis, a tilt rotates, a resize scales evenly and a move translates (all four move the object's own pixels, so they show the object itself); points use affine Moving Least Squares (Schaefer et al., 2006), which passes exactly through every dragged point and is smooth in between. Eight pins around the object keep the warp local.
 3. PixiJS draws the mesh. The selection outline is deformed with the same function, so it follows the object.
 
 Several edits on one object are applied in order; several edited objects each get their own preview layer.
 
-The maths is in `lib/warp.ts` (pure, in image pixels so aspect ratio never skews it), the background fill in `lib/fill.ts`, and the slider and constraint helpers in `lib/widgetMath.ts`.
+The maths is in `lib/warp.ts` (pure, in image pixels so aspect ratio never skews it), the background fill in `lib/fill.ts`, and the slider, rotate and constraint helpers in `lib/widgetMath.ts`.
 
 **Performance.** Deforming the whole grid with 24 control points takes about 0.15 ms (`warp.perf.test.ts`), roughly a hundredth of a 60 fps frame, so no Web Worker is used; the GPU draws the mesh. The fill runs once per object, at 96 px.
 
@@ -94,7 +99,7 @@ The maths is in `lib/warp.ts` (pure, in image pixels so aspect ratio never skews
 | Layer | Tool | Covers |
 |---|---|---|
 | Unit | Vitest | geometry, viewport and warp maths (including property checks such as exact interpolation), fill, widget maths, previews, stores, API helpers, SSE, theme |
-| Component | Vitest + Testing Library | every screen and dialog, all three widgets (drag, keyboard, constraints), the edit flow and previews, the API key flow, error states |
+| Component | Vitest + Testing Library | every screen and dialog, all six widgets (drag, keyboard, constraints), the edit flow and previews, the API key flow, error states |
 | Accessibility | vitest-axe | landing, editor with a selection, both dialogs |
 | End to end | Playwright (real Chromium, mocked API) | upload, analysis, selection, AI suggestions, key prompt, dragging every widget kind, keyboard control, reset and cancel, zoom and pan, theme |
 | Visual | Playwright screenshots | landing, selected object and mid-edit with live preview, in dark and light (local only: baselines depend on the platform's fonts) |

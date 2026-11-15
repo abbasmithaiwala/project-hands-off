@@ -33,6 +33,26 @@ const joints: Widget = {
   ],
 }
 
+const tilt: Widget = {
+  kind: 'rotate',
+  pivot: { x: 0.5, y: 0.8 },
+  handle: { x: 0.5, y: 0.2 },
+  min: -45,
+  max: 45,
+}
+
+const grow: Widget = {
+  kind: 'scale',
+  axis: { start: { x: 0.2, y: 0.8 }, end: { x: 0.6, y: 0.2 } },
+  min: 0.5,
+  max: 2,
+  initial: 1,
+}
+
+const carry: Widget = { kind: 'move', handle: { x: 0.4, y: 0.5 } }
+
+const objectBox = { x: 0.2, y: 0.2, width: 0.4, height: 0.6 }
+
 function layer(
   widget: Widget,
   change: EditChange | null,
@@ -52,6 +72,7 @@ function layer(
       objectLabel={overrides.objectLabel ?? 'couch'}
       view={overrides.view ?? view}
       imageSize={imageSize}
+      objectBox={objectBox}
       reach={overrides.reach ?? 200}
       onChange={onChange}
     />
@@ -281,5 +302,180 @@ describe('WidgetLayer', () => {
     const stale: EditChange = { kind: 'slider', value: 0.7 }
     setup(joints, stale)
     expect(handlesOf()[0]).toHaveStyle({ left: '300px', top: '150px' })
+  })
+})
+
+describe('RotateWidget', () => {
+  const pivot = { x: 0.5, y: 0.8 }
+
+  it('is a labelled slider in degrees, described as a rotation handle', () => {
+    setup(tilt, { kind: 'rotate', degrees: -12.4, pivot })
+    const handle = screen.getByRole('slider', { name: 'Shape of couch' })
+    expect(handle).toHaveAttribute('aria-roledescription', 'rotation handle')
+    expect(handle).toHaveAttribute('aria-valuemin', '-45')
+    expect(handle).toHaveAttribute('aria-valuemax', '45')
+    expect(handle).toHaveAttribute('aria-valuenow', '-12')
+    expect(handle).toHaveAttribute('aria-valuetext', '12 degrees anticlockwise')
+  })
+
+  it('rests on the ring straight above the pivot, and swings round it when turned', () => {
+    const { unmount } = setup(tilt)
+    expect(screen.getByRole('slider')).toHaveStyle({ left: '500px', top: '100px' })
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', 'not turned')
+    unmount()
+
+    setup(tilt, { kind: 'rotate', degrees: 90, pivot })
+    // 300px from the pivot at (500, 400): a clockwise quarter turn puts the handle at (800, 400).
+    const turned = screen.getByRole('slider')
+    expect(parseFloat(turned.style.left)).toBeCloseTo(800)
+    expect(parseFloat(turned.style.top)).toBeCloseTo(400)
+  })
+
+  it('reports the turn for the direction the handle is dragged, keeping the pivot', () => {
+    const { onChange } = setup(tilt)
+    drag(screen.getByRole('slider'), { x: 600, y: 100 })
+    const change = lastChange(onChange)
+    if (change?.kind !== 'rotate') throw new Error('expected a rotate change')
+    // Up and to the right of the pivot, 100 across and 300 up: about 18 degrees clockwise.
+    expect(change.degrees).toBeCloseTo(18.43, 1)
+    expect(change.pivot).toEqual(pivot)
+  })
+
+  it('cannot be turned past its limits', () => {
+    const { onChange } = setup(tilt)
+    drag(screen.getByRole('slider'), { x: 900, y: 400 })
+    expect(lastChange(onChange)).toEqual({ kind: 'rotate', degrees: 45, pivot })
+    drag(screen.getByRole('slider'), { x: 100, y: 400 })
+    expect(lastChange(onChange)).toEqual({ kind: 'rotate', degrees: -45, pivot })
+  })
+
+  it('turns five degrees per arrow key, one with Shift, and resets with Home', async () => {
+    const { onChange } = setup(tilt, { kind: 'rotate', degrees: 10, pivot })
+    screen.getByRole('slider').focus()
+
+    await userEvent.keyboard('{ArrowRight}')
+    expect(lastChange(onChange)).toEqual({ kind: 'rotate', degrees: 15, pivot })
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(lastChange(onChange)).toEqual({ kind: 'rotate', degrees: 5, pivot })
+    await userEvent.keyboard('{Shift>}{ArrowDown}{/Shift}')
+    expect(lastChange(onChange)).toEqual({ kind: 'rotate', degrees: 9, pivot })
+    await userEvent.keyboard('{Home}')
+    expect(lastChange(onChange)).toBeNull()
+  })
+
+  it('shows a signed badge only after a change', () => {
+    const { unmount } = setup(tilt)
+    expect(screen.queryByText(/°$/)).not.toBeInTheDocument()
+    unmount()
+    setup(tilt, { kind: 'rotate', degrees: 14.6, pivot })
+    expect(screen.getByText('+15°')).toBeInTheDocument()
+  })
+})
+
+describe('ScaleWidget', () => {
+  const pivot = { x: 0.2, y: 0.8 }
+
+  it('is a labelled slider in percent, described as a resize handle', () => {
+    setup(grow)
+    const handle = screen.getByRole('slider')
+    expect(handle).toHaveAttribute('aria-roledescription', 'resize handle')
+    expect(handle).toHaveAttribute('aria-valuenow', '100')
+    expect(handle).toHaveAttribute('aria-valuemin', '50')
+    expect(handle).toHaveAttribute('aria-valuemax', '200')
+    expect(handle).toHaveStyle({ left: '600px', top: '100px' })
+  })
+
+  it('reports the multiplier for how far from the anchor the corner is dragged', () => {
+    const { onChange } = setup(grow)
+    // The anchor is at (200, 400) and the corner rests at (600, 100): half-way is 0.5.
+    drag(screen.getByRole('slider'), { x: 400, y: 250 })
+    const change = lastChange(onChange)
+    if (change?.kind !== 'scale') throw new Error('expected a scale change')
+    expect(change.value).toBeCloseTo(0.5)
+    expect(change.pivot).toEqual(pivot)
+  })
+
+  it('stays within its range and nudges with the arrow keys', async () => {
+    const { onChange } = setup(grow, { kind: 'scale', value: 1.2, pivot })
+    // Far along the line from the anchor through the corner: three times the distance.
+    drag(screen.getByRole('slider'), { x: 1400, y: -500 })
+    expect(lastChange(onChange)).toEqual({ kind: 'scale', value: 2, pivot })
+
+    screen.getByRole('slider').focus()
+    await userEvent.keyboard('{ArrowUp}')
+    expect(lastChange(onChange)).toEqual({ kind: 'scale', value: expect.closeTo(1.25, 5), pivot })
+    await userEvent.keyboard('{Home}')
+    expect(lastChange(onChange)).toBeNull()
+  })
+
+  it('shows the size next to the handle once changed', () => {
+    setup(grow, { kind: 'scale', value: 1.25, pivot })
+    expect(screen.getByText('125%')).toBeInTheDocument()
+  })
+})
+
+describe('MoveWidget', () => {
+  it('is a labelled move handle resting on the object', () => {
+    setup(carry)
+    const handle = screen.getByRole('button', { name: 'Shape of couch' })
+    expect(handle).toHaveAttribute('aria-roledescription', 'move handle')
+    expect(handle).toHaveAttribute('aria-valuetext', 'not moved')
+    expect(handle).toHaveStyle({ left: '400px', top: '250px' })
+  })
+
+  it('reports how far the object moved as a share of the image', () => {
+    const { onChange } = setup(carry)
+    drag(screen.getByRole('button'), { x: 500, y: 200 })
+    const change = lastChange(onChange)
+    if (change?.kind !== 'move') throw new Error('expected a move change')
+    expect(change.dx).toBeCloseTo(0.1)
+    expect(change.dy).toBeCloseTo(-0.1)
+  })
+
+  it('carries its handle with the object and says where it went', () => {
+    setup(carry, { kind: 'move', dx: 0.1, dy: -0.1 })
+    const handle = screen.getByRole('button')
+    expect(handle).toHaveStyle({ left: '500px', top: '200px' })
+    expect(handle).toHaveAttribute('aria-valuetext', 'moved 10% right, 10% up')
+    expect(screen.getByText('10% right, 10% up')).toBeInTheDocument()
+  })
+
+  it('cannot carry the object further than the reach', () => {
+    const { onChange } = setup(carry)
+    drag(screen.getByRole('button'), { x: 990, y: 490 })
+    const change = lastChange(onChange)
+    if (change?.kind !== 'move') throw new Error('expected a move change')
+    expect(Math.hypot(change.dx * imageSize.width, change.dy * imageSize.height)).toBeCloseTo(
+      200,
+      0,
+    )
+  })
+
+  it('locks to one direction with Shift', () => {
+    const { onChange } = setup(carry)
+    drag(screen.getByRole('button'), { x: 500, y: 270 }, { shiftKey: true })
+    const change = lastChange(onChange)
+    if (change?.kind !== 'move') throw new Error('expected a move change')
+    expect(change.dx).toBeCloseTo(0.1)
+    expect(change.dy).toBeCloseTo(0)
+  })
+
+  it('nudges with the arrow keys and resets with Home', async () => {
+    const { onChange } = setup(carry, { kind: 'move', dx: 0.1, dy: 0 })
+    screen.getByRole('button').focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(lastChange(onChange)).toEqual({
+      kind: 'move',
+      dx: expect.closeTo(0.11, 5),
+      dy: expect.closeTo(0, 5),
+    })
+    await userEvent.keyboard('{ArrowDown}')
+    expect(lastChange(onChange)).toEqual({
+      kind: 'move',
+      dx: expect.closeTo(0.1, 5),
+      dy: expect.closeTo(0.01, 5),
+    })
+    await userEvent.keyboard('{Home}')
+    expect(lastChange(onChange)).toBeNull()
   })
 })

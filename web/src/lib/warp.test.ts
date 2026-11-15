@@ -8,13 +8,51 @@ import {
   objectRegion,
   movingLeastSquares,
   pinsAround,
+  rotateAbout,
+  scaleAbout,
   stretchAlongAxis,
+  translate,
 } from './warp'
 
 const close = (a: { x: number; y: number }, b: { x: number; y: number }, digits = 6) => {
   expect(a.x).toBeCloseTo(b.x, digits)
   expect(a.y).toBeCloseTo(b.y, digits)
 }
+
+describe('rigid deformations', () => {
+  const pivot = { x: 100, y: 100 }
+
+  it('rotates clockwise on screen about the pivot and leaves the pivot alone', () => {
+    const quarter = rotateAbout(pivot, Math.PI / 2)
+    close(quarter(pivot), pivot)
+    // Straight up from the pivot swings to the right when turned clockwise (y grows downward).
+    close(quarter({ x: 100, y: 50 }), { x: 150, y: 100 })
+    close(rotateAbout(pivot, -Math.PI / 2)({ x: 100, y: 50 }), { x: 50, y: 100 })
+  })
+
+  it('keeps distances from the pivot when rotating', () => {
+    const turned = rotateAbout(pivot, 0.7)({ x: 160, y: 60 })
+    expect(Math.hypot(turned.x - pivot.x, turned.y - pivot.y)).toBeCloseTo(Math.hypot(60, 40), 6)
+  })
+
+  it('scales evenly about the pivot in both directions', () => {
+    const grown = scaleAbout(pivot, 2)
+    close(grown(pivot), pivot)
+    close(grown({ x: 150, y: 120 }), { x: 200, y: 140 })
+    close(scaleAbout(pivot, 0.5)({ x: 200, y: 300 }), { x: 150, y: 200 })
+  })
+
+  it('translates every point by the same offset', () => {
+    close(translate(12, -8)({ x: 1, y: 2 }), { x: 13, y: -6 })
+  })
+
+  it('are the identity when nothing changes', () => {
+    const point = { x: 5, y: 6 }
+    for (const deform of [rotateAbout(pivot, 0), scaleAbout(pivot, 1), translate(0, 0)]) {
+      expect(deform(point)).toBe(point)
+    }
+  })
+})
 
 describe('stretchAlongAxis', () => {
   const start = { x: 100, y: 100 }

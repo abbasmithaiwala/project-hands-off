@@ -123,6 +123,12 @@ pub enum WidgetKind {
     ControlPoints,
     /// Several independent handles (puppet-warp style).
     MultiHandle,
+    /// A handle on a ring that turns the object about a pivot.
+    Rotate,
+    /// A corner handle that resizes the whole object about a fixed anchor.
+    Scale,
+    /// A single handle that carries the whole object to a new place.
+    Move,
 }
 
 impl WidgetKind {
@@ -133,6 +139,9 @@ impl WidgetKind {
             Self::Slider => "slider",
             Self::ControlPoints => "control_points",
             Self::MultiHandle => "multi_handle",
+            Self::Rotate => "rotate",
+            Self::Scale => "scale",
+            Self::Move => "move",
         }
     }
 }
@@ -314,6 +323,34 @@ pub enum Widget {
         /// Initial handle positions.
         handles: Vec<NormalizedPoint>,
     },
+    /// A handle on a ring around `pivot`; dragging it around the ring turns the object.
+    Rotate {
+        /// The point the object turns about, which stays fixed.
+        pivot: NormalizedPoint,
+        /// Where the handle rests. Its distance from `pivot` is the ring's radius and its
+        /// direction is the zero angle.
+        handle: NormalizedPoint,
+        /// Furthest anticlockwise turn, in degrees (negative).
+        min: f32,
+        /// Furthest clockwise turn, in degrees (positive).
+        max: f32,
+    },
+    /// A handle that resizes the whole object evenly about a fixed anchor.
+    Scale {
+        /// `start` is the anchor that stays fixed; `end` is where the handle rests.
+        axis: Axis,
+        /// Smallest allowed multiplier.
+        min: f32,
+        /// Largest allowed multiplier.
+        max: f32,
+        /// Starting multiplier, normally `1.0`.
+        initial: f32,
+    },
+    /// A handle that moves the whole object without changing its shape.
+    Move {
+        /// Where the handle rests, on the object.
+        handle: NormalizedPoint,
+    },
 }
 
 impl Widget {
@@ -324,6 +361,9 @@ impl Widget {
             Self::Slider { .. } => WidgetKind::Slider,
             Self::ControlPoints { .. } => WidgetKind::ControlPoints,
             Self::MultiHandle { .. } => WidgetKind::MultiHandle,
+            Self::Rotate { .. } => WidgetKind::Rotate,
+            Self::Scale { .. } => WidgetKind::Scale,
+            Self::Move { .. } => WidgetKind::Move,
         }
     }
 }
@@ -354,6 +394,27 @@ pub enum EditChange {
         origin: Vec<NormalizedPoint>,
         /// Positions after the edit.
         target: Vec<NormalizedPoint>,
+    },
+    /// The object turned about `pivot`.
+    Rotate {
+        /// Clockwise turn in degrees as seen in the photo; negative is anticlockwise.
+        degrees: f32,
+        /// The point the object turned about, so the edit can be put in words.
+        pivot: NormalizedPoint,
+    },
+    /// The whole object resized evenly about `pivot`.
+    Scale {
+        /// New size as a multiplier (`1.0` is unchanged).
+        value: f32,
+        /// The anchor that stayed fixed, so the edit can be put in words.
+        pivot: NormalizedPoint,
+    },
+    /// The whole object moved, as a share of the image's width and height.
+    Move {
+        /// Rightward shift as a fraction of the image width; negative is leftward.
+        dx: f32,
+        /// Downward shift as a fraction of the image height; negative is upward.
+        dy: f32,
     },
 }
 
@@ -399,6 +460,72 @@ mod tests {
         let back: Widget = serde_json::from_str(&serde_json::to_string(&widget).unwrap()).unwrap();
         assert_eq!(back, widget);
         assert_eq!(back.kind(), WidgetKind::Slider);
+    }
+
+    #[test]
+    fn transform_widgets_and_edits_round_trip_with_their_kind_names() {
+        let widgets = [
+            (
+                Widget::Rotate {
+                    pivot: point(0.5, 0.9),
+                    handle: point(0.5, 0.2),
+                    min: -45.0,
+                    max: 45.0,
+                },
+                WidgetKind::Rotate,
+                "rotate",
+            ),
+            (
+                Widget::Scale {
+                    axis: Axis {
+                        start: point(0.5, 0.5),
+                        end: point(0.8, 0.2),
+                    },
+                    min: 0.5,
+                    max: 2.0,
+                    initial: 1.0,
+                },
+                WidgetKind::Scale,
+                "scale",
+            ),
+            (
+                Widget::Move {
+                    handle: point(0.5, 0.5),
+                },
+                WidgetKind::Move,
+                "move",
+            ),
+        ];
+        for (widget, kind, name) in widgets {
+            let json = serde_json::to_value(&widget).unwrap();
+            assert_eq!(json["kind"], name);
+            assert_eq!(widget.kind(), kind);
+            assert_eq!(kind.as_str(), name);
+            assert_eq!(serde_json::from_value::<Widget>(json).unwrap(), widget);
+        }
+
+        let changes = [
+            EditChange::Rotate {
+                degrees: -12.5,
+                pivot: point(0.5, 0.9),
+            },
+            EditChange::Scale {
+                value: 1.3,
+                pivot: point(0.5, 0.5),
+            },
+            EditChange::Move { dx: 0.1, dy: -0.05 },
+        ];
+        for change in changes {
+            let back: EditChange =
+                serde_json::from_str(&serde_json::to_string(&change).unwrap()).unwrap();
+            assert_eq!(back, change);
+        }
+    }
+
+    #[test]
+    fn a_rotation_needs_its_pivot() {
+        let json = r#"{"kind":"rotate","degrees":10.0}"#;
+        assert!(serde_json::from_str::<EditChange>(json).is_err());
     }
 
     #[test]

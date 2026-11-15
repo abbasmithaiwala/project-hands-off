@@ -161,6 +161,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
               objectLabel={selected.label}
               view={view}
               imageSize={size}
+              objectBox={selected.bbox}
               reach={reachFor(selected, size)}
               onChange={handleChange}
             />
@@ -248,6 +249,7 @@ export function EditorScreen({ image, createStage }: EditorScreenProps) {
             hasObjects: objects.length > 0,
             hasSelection: selected !== null,
             hasActiveWidget: widget.data !== undefined && activeProperty !== null,
+            widgetKind: widget.data?.kind ?? null,
             hasPendingEdits: pendingEdits.length > 0,
           }}
         />

@@ -5,7 +5,17 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Controls that match the change. Tilt is now a ring you turn, overall size is a corner handle that resizes
+  evenly, and position is a handle that carries the object, instead of every property being a slider. Each shows a
+  dashed frame that follows the edit, and the first-run tip describes the control on screen. The API gains
+  `rotate`, `scale` and `move` widgets and edits (ADR 0014).
+
 ### Changed
+- Property suggestions, widget planning and edit summaries use new prompt versions (`suggester.v2`, `planner.v2`,
+  `summariser.v3`) that choose the control from what the change physically is. Cached suggestions and plans are
+  refreshed.
+- The default image model for generation and retries is `google/gemini-3-pro-image` (ADR 0013).
 - The project licence is now the MIT License (it was Apache-2.0).
 
 ## [0.1.0] - 2026-11-14

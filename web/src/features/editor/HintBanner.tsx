@@ -4,7 +4,7 @@ import { IconButton } from '@/design/IconButton'
 import { Panel } from '@/design/Panel'
 import {
   currentHint,
-  HINT_TEXT,
+  hintText,
   markHintDone,
   readDoneHints,
   type HintContext,
@@ -33,7 +33,7 @@ export function HintBanner({ context }: { context: HintContext }) {
 
   return (
     <Panel glass className={styles.hint} role="status" aria-live="polite">
-      <span>{HINT_TEXT[hint]}</span>
+      <span>{hintText(hint, context.widgetKind)}</span>
       <IconButton label="Dismiss tip" onClick={() => retire(hint)}>
         <X size={16} />
       </IconButton>

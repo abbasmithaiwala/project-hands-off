@@ -21,6 +21,31 @@ const WIDGETS: Record<string, unknown> = {
   cushions: JSON.parse(fixture('widget-multi-handle.json').toString('utf8')),
 }
 
+/** Controls for turning, resizing and moving the couch as a whole, offered only on request. */
+const TRANSFORM_PROPERTIES = [
+  { key: 'tilt', label: 'Couch tilt', widget: 'rotate' },
+  { key: 'size', label: 'Couch size', widget: 'scale' },
+  { key: 'position', label: 'Couch position', widget: 'move' },
+]
+
+const TRANSFORM_WIDGETS: Record<string, unknown> = {
+  tilt: {
+    kind: 'rotate',
+    pivot: { x: 0.45, y: 0.86 },
+    handle: { x: 0.45, y: 0.4 },
+    min: -45,
+    max: 45,
+  },
+  size: {
+    kind: 'scale',
+    axis: { start: { x: 0.451, y: 0.73 }, end: { x: 0.693, y: 0.472 } },
+    min: 0.5,
+    max: 2,
+    initial: 1,
+  },
+  position: { kind: 'move', handle: { x: 0.451, y: 0.73 } },
+}
+
 const IMAGE = {
   id: '11111111-1111-1111-1111-111111111111',
   hash: 'a'.repeat(64),
@@ -92,6 +117,8 @@ export interface ApiMockOptions {
   needsKey?: boolean
   /** Projects listed on the landing screen. Defaults to none. */
   recent?: Array<Record<string, unknown>>
+  /** Also offer tilt, size and position, which use the rotate, scale and move controls. */
+  transforms?: boolean
 }
 
 export const SAVED_PROJECT = { ...IMAGE, name: 'Living room' }
@@ -108,6 +135,10 @@ export async function mockApi(page: Page, options: ApiMockOptions = {}): Promise
   }
   let recent = [...(options.recent ?? [])]
   let keySaved = !options.needsKey
+  const properties = options.transforms
+    ? { properties: [...PROPERTIES.properties, ...TRANSFORM_PROPERTIES] }
+    : PROPERTIES
+  const widgets = options.transforms ? { ...WIDGETS, ...TRANSFORM_WIDGETS } : WIDGETS
   const base = '**/api/v1'
 
   await page.route(/\/api\/v1\/images(\?.*)?$/, (route) =>
@@ -153,7 +184,7 @@ export async function mockApi(page: Page, options: ApiMockOptions = {}): Promise
   )
   await page.route(`${base}/images/*/objects/0/properties`, (route) =>
     keySaved
-      ? json(route, PROPERTIES)
+      ? json(route, properties)
       : json(
           route,
           {
@@ -168,7 +199,7 @@ export async function mockApi(page: Page, options: ApiMockOptions = {}): Promise
   )
   await page.route(`${base}/images/*/objects/0/widget`, (route) => {
     const { property } = route.request().postDataJSON() as { property: string }
-    const widget = WIDGETS[property]
+    const widget = widgets[property]
     return widget
       ? json(route, widget)
       : json(route, { code: 'not_found', message: 'property not found' }, 404)

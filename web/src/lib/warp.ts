@@ -35,6 +35,33 @@ export function stretchAlongAxis(start: Point, end: Point, scale: number): Defor
   }
 }
 
+/** Turn everything about `pivot` by `radians`, clockwise on screen (y grows downward). */
+export function rotateAbout(pivot: Point, radians: number): Deformation {
+  if (radians === 0) return identity
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  return (point) => {
+    const rx = point.x - pivot.x
+    const ry = point.y - pivot.y
+    return { x: pivot.x + rx * cos - ry * sin, y: pivot.y + rx * sin + ry * cos }
+  }
+}
+
+/** Resize everything evenly about `pivot`, which stays where it is. */
+export function scaleAbout(pivot: Point, factor: number): Deformation {
+  if (factor === 1) return identity
+  return (point) => ({
+    x: pivot.x + (point.x - pivot.x) * factor,
+    y: pivot.y + (point.y - pivot.y) * factor,
+  })
+}
+
+/** Carry everything by the same offset. */
+export function translate(dx: number, dy: number): Deformation {
+  if (dx === 0 && dy === 0) return identity
+  return (point) => ({ x: point.x + dx, y: point.y + dy })
+}
+
 const NEAR = 1e-6
 const SINGULAR = 1e-9
 

@@ -20,24 +20,24 @@ pub const SUGGESTIONS_SCHEMA: &str = "property_suggestions";
 /// Schema identifier for widget plans.
 pub const WIDGET_SCHEMA: &str = "widget_plan";
 /// Bump when the suggester prompt or schema changes, to invalidate cached results.
-pub const SUGGESTER_PROMPT_VERSION: &str = "v1";
+pub const SUGGESTER_PROMPT_VERSION: &str = "v2";
 /// Bump when the planner prompt or schema changes, to invalidate cached results.
-pub const PLANNER_PROMPT_VERSION: &str = "v1.2";
+pub const PLANNER_PROMPT_VERSION: &str = "v2";
 /// Schema identifier for edit summaries.
 pub const SUMMARY_SCHEMA: &str = "edit_summary";
 /// Bump when the summariser prompt or schema changes.
-pub const SUMMARISER_PROMPT_VERSION: &str = "v2";
+pub const SUMMARISER_PROMPT_VERSION: &str = "v3";
 /// System prompt for the summariser.
-pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v2.md");
+pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v3.md");
 const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v2.md");
 const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v2.md");
 const GENERATOR_WITHOUT_PREVIEW: &str =
     include_str!("../../../prompts/generator-without-preview.v2.md");
 
 /// System prompt for the suggester.
-pub const SUGGESTER_SYSTEM: &str = include_str!("../../../prompts/suggester.v1.md");
+pub const SUGGESTER_SYSTEM: &str = include_str!("../../../prompts/suggester.v2.md");
 /// System prompt for the widget planner.
-pub const PLANNER_SYSTEM: &str = include_str!("../../../prompts/planner.v1.md");
+pub const PLANNER_SYSTEM: &str = include_str!("../../../prompts/planner.v2.md");
 
 const MAX_PROPERTIES: usize = 6;
 const MAX_KEY_LEN: usize = 32;
@@ -47,6 +47,11 @@ const MIN_SLIDER_SPAN: f32 = 0.02;
 const MIN_POINT_SPREAD: f32 = 0.12;
 /// Handles must be at least this far apart (crop units).
 const MIN_HANDLE_DISTANCE: f32 = 0.04;
+/// The ring of a rotate control must be at least this big (crop units) to be grabbable.
+const MIN_ROTATE_RADIUS: f32 = 0.04;
+/// A rotate control must offer at least this much total turn, in degrees.
+const MIN_ROTATE_SPAN: f32 = 10.0;
+const MAX_ROTATE_DEGREES: f32 = 180.0;
 const CONTROL_POINTS: std::ops::RangeInclusive<usize> = 3..=16;
 const HANDLES: std::ops::RangeInclusive<usize> = 1..=8;
 
@@ -93,11 +98,15 @@ struct WidgetDraft {
     kind: WidgetKind,
     /// Slider only: the line the handle moves along.
     axis: Option<AxisDraft>,
-    /// Slider only: lowest scale multiplier.
+    /// Rotate only: the point the object turns about.
+    pivot: Option<PointDraft>,
+    /// Rotate and move only: where the handle rests.
+    handle: Option<PointDraft>,
+    /// Slider and scale: lowest multiplier. Rotate: furthest anticlockwise turn in degrees (negative).
     min: Option<f32>,
-    /// Slider only: highest scale multiplier.
+    /// Slider and scale: highest multiplier. Rotate: furthest clockwise turn in degrees (positive).
     max: Option<f32>,
-    /// Slider only: starting multiplier.
+    /// Slider and scale: starting multiplier. Rotate and move: null.
     initial: Option<f32>,
     /// Control points only: points around the boundary.
     points: Option<Vec<PointDraft>>,
@@ -236,6 +245,42 @@ fn percent(value: f32) -> i32 {
     }
 }
 
+fn turn_text(degrees: f32) -> String {
+    #[allow(clippy::cast_possible_truncation)]
+    let whole = degrees.abs().round() as i32;
+    let direction = if degrees < 0.0 {
+        "anticlockwise"
+    } else {
+        "clockwise"
+    };
+    format!("{whole} degrees {direction}")
+}
+
+fn shift_text(dx: f32, dy: f32) -> String {
+    let part = |value: f32, positive: &str, negative: &str, of: &str| {
+        let amount = percent(value.abs());
+        (amount > 0).then(|| {
+            let way = if value < 0.0 { negative } else { positive };
+            format!("{way} by {amount}% of the image {of}")
+        })
+    };
+    let parts: Vec<String> = [
+        part(dx, "right", "left", "width"),
+        part(dy, "down", "up", "height"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if parts.is_empty() {
+        "left where it is".to_owned()
+    } else {
+        format!(
+            "moved {}, with its shape and size unchanged",
+            parts.join(" and ")
+        )
+    }
+}
+
 /// A precise, model-readable description of one edit, with numbers.
 #[must_use]
 pub fn describe_edit(line: &EditLine<'_>) -> String {
@@ -256,6 +301,19 @@ pub fn describe_edit(line: &EditLine<'_>) -> String {
                 percent(*value)
             )
         }
+        EditChange::Scale { value, pivot } => format!(
+            "{head}: resized evenly to {}% of its original size, keeping the point ({}% across, {}% down) where it is (100% is unchanged)",
+            percent(*value),
+            percent(pivot.x),
+            percent(pivot.y)
+        ),
+        EditChange::Rotate { degrees, pivot } => format!(
+            "{head}: turned {} as seen in the photo, about the point ({}% across, {}% down), which stays where it is",
+            turn_text(*degrees),
+            percent(pivot.x),
+            percent(pivot.y)
+        ),
+        EditChange::Move { dx, dy } => format!("{head}: {}", shift_text(*dx, *dy)),
         EditChange::ControlPoints { origin, target }
         | EditChange::MultiHandle { origin, target } => {
             let moves: Vec<String> = origin
@@ -339,7 +397,13 @@ pub struct EditSummary {
 
 fn short_description(line: &EditLine<'_>) -> String {
     match line.change {
-        EditChange::Slider { value, .. } => format!("{}%", percent(*value)),
+        EditChange::Slider { value, .. } | EditChange::Scale { value, .. } => {
+            format!("{}%", percent(*value))
+        }
+        EditChange::Rotate { degrees, .. } => turn_text(*degrees),
+        EditChange::Move { dx, dy } => {
+            format!("moved {}% across, {}% down", percent(*dx), percent(*dy))
+        }
         EditChange::ControlPoints { origin, target }
         | EditChange::MultiHandle { origin, target } => {
             let moved = origin
@@ -478,6 +542,93 @@ pub type Place<'a> = &'a dyn Fn(f32, f32) -> NormalizedPoint;
 /// Moves a point onto the object if it lies off it.
 pub type Snap<'a> = &'a dyn Fn(NormalizedPoint) -> NormalizedPoint;
 
+/// The axis and multiplier range shared by sliders and scale handles.
+fn scalar_range(
+    draft: &WidgetDraft,
+    name: &str,
+    place: Place<'_>,
+) -> Result<(Axis, f32, f32, f32), String> {
+    let axis = draft
+        .axis
+        .as_ref()
+        .ok_or_else(|| format!("`axis` is required for {name}"))?;
+    let (min, max, initial) = (
+        draft
+            .min
+            .ok_or_else(|| format!("`min` is required for {name}"))?,
+        draft
+            .max
+            .ok_or_else(|| format!("`max` is required for {name}"))?,
+        draft
+            .initial
+            .ok_or_else(|| format!("`initial` is required for {name}"))?,
+    );
+    if ![min, max, initial].iter().all(|v| v.is_finite()) || min <= 0.0 || min >= max {
+        return Err("`min` must be positive and below `max`".into());
+    }
+    if initial < min || initial > max {
+        return Err("`initial` must lie between `min` and `max`".into());
+    }
+    let finite = |p: &PointDraft| p.x.is_finite() && p.y.is_finite();
+    if !finite(&axis.start) || !finite(&axis.end) {
+        return Err("`axis` contains a coordinate that is not a number".into());
+    }
+    let (start, end) = (
+        place(axis.start.x, axis.start.y),
+        place(axis.end.x, axis.end.y),
+    );
+    if (start.x - end.x).hypot(start.y - end.y) < MIN_SLIDER_SPAN {
+        return Err("`axis` is too short to drag".into());
+    }
+    Ok((Axis { start, end }, min, max, initial))
+}
+
+/// A rotate plan: a pivot, a handle on the ring around it, and the allowed turn.
+fn parse_rotate(draft: &WidgetDraft, place: Place<'_>) -> Result<Widget, String> {
+    let pivot = draft
+        .pivot
+        .as_ref()
+        .ok_or("`pivot` is required for rotate")?;
+    let handle = draft
+        .handle
+        .as_ref()
+        .ok_or("`handle` is required for rotate")?;
+    let (min, max) = (
+        draft.min.ok_or("`min` is required for rotate")?,
+        draft.max.ok_or("`max` is required for rotate")?,
+    );
+    if ![pivot.x, pivot.y, handle.x, handle.y]
+        .iter()
+        .all(|v| v.is_finite())
+    {
+        return Err("`pivot` or `handle` contains a coordinate that is not a number".into());
+    }
+    let valid_range = min.is_finite()
+        && max.is_finite()
+        && min <= 0.0
+        && max >= 0.0
+        && min >= -MAX_ROTATE_DEGREES
+        && max <= MAX_ROTATE_DEGREES
+        && max - min >= MIN_ROTATE_SPAN;
+    if !valid_range {
+        return Err(format!(
+            "`min` must be at most 0 and `max` at least 0, within {MAX_ROTATE_DEGREES} degrees, spanning at least {MIN_ROTATE_SPAN} degrees"
+        ));
+    }
+    let (pivot, handle) = (place(pivot.x, pivot.y), place(handle.x, handle.y));
+    if (pivot.x - handle.x).hypot(pivot.y - handle.y) < MIN_ROTATE_RADIUS {
+        return Err(
+            "`handle` is too close to `pivot`; put it at the far end of the part that turns".into(),
+        );
+    }
+    Ok(Widget::Rotate {
+        pivot,
+        handle,
+        min,
+        max,
+    })
+}
+
 /// Parse and validate a widget plan for the `expected` kind.
 ///
 /// `place` converts the model's crop-relative coordinates to image coordinates and `snap`
@@ -512,34 +663,32 @@ pub fn parse_widget(
 
     match expected {
         WidgetKind::Slider => {
-            let axis = draft.axis.ok_or("`axis` is required for a slider")?;
-            let (min, max, initial) = (
-                draft.min.ok_or("`min` is required for a slider")?,
-                draft.max.ok_or("`max` is required for a slider")?,
-                draft.initial.ok_or("`initial` is required for a slider")?,
-            );
-            if ![min, max, initial].iter().all(|v| v.is_finite()) || min <= 0.0 || min >= max {
-                return Err("`min` must be positive and below `max`".into());
-            }
-            if initial < min || initial > max {
-                return Err("`initial` must lie between `min` and `max`".into());
-            }
-            if !finite(&axis.start) || !finite(&axis.end) {
-                return Err("`axis` contains a coordinate that is not a number".into());
-            }
-            let (start, end) = (
-                place(axis.start.x, axis.start.y),
-                place(axis.end.x, axis.end.y),
-            );
-            if (start.x - end.x).hypot(start.y - end.y) < MIN_SLIDER_SPAN {
-                return Err("`axis` is too short to drag".into());
-            }
+            let (axis, min, max, initial) = scalar_range(&draft, "slider", place)?;
             Ok(Widget::Slider {
-                axis: Axis { start, end },
+                axis,
                 min,
                 max,
                 initial,
             })
+        }
+        WidgetKind::Scale => {
+            let (axis, min, max, initial) = scalar_range(&draft, "scale", place)?;
+            Ok(Widget::Scale {
+                axis,
+                min,
+                max,
+                initial,
+            })
+        }
+        WidgetKind::Rotate => parse_rotate(&draft, place),
+        WidgetKind::Move => {
+            let handle = draft.handle.ok_or("`handle` is required for move")?;
+            let moved = convert(vec![handle], "handle")?;
+            let handle = moved
+                .first()
+                .copied()
+                .ok_or("`handle` is required for move")?;
+            Ok(Widget::Move { handle })
         }
         WidgetKind::ControlPoints => {
             let raw = draft
@@ -781,7 +930,9 @@ mod tests {
             assert!(!schema.to_string().contains("$ref"));
         }
         let required = widget_schema()["required"].clone();
-        for field in ["kind", "axis", "min", "max", "initial", "points", "handles"] {
+        for field in [
+            "kind", "axis", "pivot", "handle", "min", "max", "initial", "points", "handles",
+        ] {
             assert!(
                 required.as_array().unwrap().contains(&json!(field)),
                 "{field}"
@@ -867,6 +1018,139 @@ mod tests {
             "{text}"
         );
         assert!(text.ends_with("(100% is unchanged)"), "{text}");
+    }
+
+    fn rotate_json() -> Value {
+        json!({ "kind": "rotate", "axis": null, "pivot": {"x": 0.5, "y": 0.9}, "handle": {"x": 0.5, "y": 0.1},
+                "min": -45.0, "max": 45.0, "initial": null, "points": null, "handles": null })
+    }
+
+    #[test]
+    fn parses_rotate_scale_and_move_widgets() {
+        let rotate = widget(&rotate_json(), WidgetKind::Rotate).unwrap();
+        assert!(matches!(
+            rotate,
+            Widget::Rotate { pivot, handle, min, max }
+                if (pivot.y, handle.y, min, max) == (0.9, 0.1, -45.0, 45.0)
+        ));
+
+        let mut scale = slider_json();
+        scale["kind"] = json!("scale");
+        scale["max"] = json!(2.0);
+        let scale = widget(&scale, WidgetKind::Scale).unwrap();
+        assert!(matches!(scale, Widget::Scale { max, .. } if (max - 2.0).abs() < f32::EPSILON));
+
+        let moved = widget(
+            &json!({ "kind": "move", "axis": null, "pivot": null, "handle": {"x": 0.4, "y": 0.6},
+                     "min": null, "max": null, "initial": null, "points": null, "handles": null }),
+            WidgetKind::Move,
+        )
+        .unwrap();
+        assert!(matches!(moved, Widget::Move { handle } if (handle.x, handle.y) == (0.4, 0.6)));
+    }
+
+    #[test]
+    fn rejects_bad_rotate_plans() {
+        for (field, value, expected) in [
+            ("min", json!(5.0), "`min` must be at most 0"),
+            ("max", json!(-5.0), "`max` at least 0"),
+            ("min", json!(-200.0), "within 180"),
+            ("max", json!(3.0), "spanning at least"),
+        ] {
+            let mut json = rotate_json();
+            json[field] = value;
+            if field == "max" && expected == "spanning at least" {
+                json["min"] = json!(-3.0);
+            }
+            let error = widget(&json, WidgetKind::Rotate).unwrap_err();
+            assert!(error.contains(expected), "{field}: {error}");
+        }
+        let mut no_pivot = rotate_json();
+        no_pivot["pivot"] = Value::Null;
+        assert!(
+            widget(&no_pivot, WidgetKind::Rotate)
+                .unwrap_err()
+                .contains("pivot")
+        );
+        let mut cramped = rotate_json();
+        cramped["handle"] = json!({"x": 0.51, "y": 0.9});
+        assert!(
+            widget(&cramped, WidgetKind::Rotate)
+                .unwrap_err()
+                .contains("too close")
+        );
+    }
+
+    #[test]
+    fn a_move_handle_is_snapped_onto_the_object() {
+        let snap = |_: NormalizedPoint| NormalizedPoint::new(0.5, 0.5).unwrap();
+        let moved = parse_widget(
+            &json!({ "kind": "move", "handle": {"x": 0.0, "y": 0.0} }).to_string(),
+            WidgetKind::Move,
+            &identity,
+            &snap,
+        )
+        .unwrap();
+        assert!(matches!(moved, Widget::Move { handle } if (handle.x, handle.y) == (0.5, 0.5)));
+        assert!(
+            widget(&json!({ "kind": "move" }), WidgetKind::Move)
+                .unwrap_err()
+                .contains("handle")
+        );
+    }
+
+    #[test]
+    fn describes_rotation_scale_and_movement_in_words() {
+        let pivot = NormalizedPoint::new(0.5, 0.9).unwrap();
+        let turn = EditChange::Rotate {
+            degrees: -14.6,
+            pivot,
+        };
+        assert_eq!(
+            describe_edit(&slider_line(&turn, 0)),
+            "Couch length of the couch: turned 15 degrees anticlockwise as seen in the photo, about the point (50% across, 90% down), which stays where it is"
+        );
+        let clockwise = EditChange::Rotate {
+            degrees: 30.0,
+            pivot,
+        };
+        assert!(describe_edit(&slider_line(&clockwise, 0)).contains("30 degrees clockwise"));
+
+        let scale = EditChange::Scale { value: 1.25, pivot };
+        let text = describe_edit(&slider_line(&scale, 0));
+        assert!(
+            text.contains("resized evenly to 125%") && text.contains("(50% across, 90% down)"),
+            "{text}"
+        );
+
+        let moved = EditChange::Move {
+            dx: -0.12,
+            dy: 0.05,
+        };
+        assert_eq!(
+            describe_edit(&slider_line(&moved, 0)),
+            "Couch length of the couch: moved left by 12% of the image width and down by 5% of the image height, with its shape and size unchanged"
+        );
+        let still = EditChange::Move { dx: 0.0, dy: 0.0 };
+        assert!(describe_edit(&slider_line(&still, 0)).ends_with("left where it is"));
+    }
+
+    #[test]
+    fn template_change_logs_name_the_turn_and_the_move() {
+        let pivot = NormalizedPoint::new(0.5, 0.5).unwrap();
+        let turn = EditChange::Rotate {
+            degrees: 10.0,
+            pivot,
+        };
+        let moved = EditChange::Move { dx: 0.1, dy: 0.0 };
+        let lines = [slider_line(&turn, 0), slider_line(&moved, 1)];
+        let summary = template_summary(&lines);
+        assert!(summary.changes[0].text.contains("10 degrees clockwise"));
+        assert!(
+            summary.changes[1]
+                .text
+                .contains("moved 10% across, 0% down")
+        );
     }
 
     #[test]

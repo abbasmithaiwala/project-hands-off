@@ -29,23 +29,30 @@ fn suggestions(label: &str) -> Value {
             property("length", &format!("{} length", capitalise(label)), "slider"),
             property("height", &format!("{} height", capitalise(label)), "slider"),
             property("shape", "Outline shape", "control_points"),
+            property("position", "Position", "move"),
         ],
         "person" => vec![
             property("arm_position", "Arm position", "multi_handle"),
-            property("expression", "Expression", "multi_handle"),
+            property("head_tilt", "Head tilt", "rotate"),
             property("build", "Body width", "slider"),
+            property("size", "Size", "scale"),
         ],
         "bottle" | "vase" | "cup" | "bowl" | "wine glass" => vec![
+            property("tilt", "Tilt", "rotate"),
             property("shape", "Shape", "control_points"),
             property("height", "Height", "slider"),
             property("fill_level", "Fill level", "slider"),
+            property("position", "Position", "move"),
         ],
         "sandwich" | "pizza" | "cake" | "donut" | "hot dog" => vec![
             property("height", "Stack height", "slider"),
             property("width", "Width", "slider"),
+            property("tilt", "Tilt", "rotate"),
         ],
         _ => vec![
-            property("size", "Size", "slider"),
+            property("size", "Size", "scale"),
+            property("tilt", "Tilt", "rotate"),
+            property("position", "Position", "move"),
             property("shape", "Shape", "control_points"),
         ],
     };
@@ -69,7 +76,16 @@ fn widget(key: &str, kind: &str) -> Value {
             } else {
                 (point(0.1, 0.5), point(0.9, 0.5))
             };
-            json!({ "kind": kind, "axis": { "start": start, "end": end }, "min": 0.5, "max": 1.5, "initial": 1.0, "points": null, "handles": null })
+            json!({ "kind": kind, "axis": { "start": start, "end": end }, "pivot": null, "handle": null, "min": 0.5, "max": 1.5, "initial": 1.0, "points": null, "handles": null })
+        }
+        "rotate" => {
+            json!({ "kind": kind, "axis": null, "pivot": point(0.5, 0.85), "handle": point(0.5, 0.1), "min": -45.0, "max": 45.0, "initial": null, "points": null, "handles": null })
+        }
+        "scale" => {
+            json!({ "kind": kind, "axis": { "start": point(0.5, 0.5), "end": point(0.9, 0.1) }, "pivot": null, "handle": null, "min": 0.5, "max": 2.0, "initial": 1.0, "points": null, "handles": null })
+        }
+        "move" => {
+            json!({ "kind": kind, "axis": null, "pivot": null, "handle": point(0.5, 0.5), "min": null, "max": null, "initial": null, "points": null, "handles": null })
         }
         "control_points" => {
             let ring: Vec<Value> = (0..8)
@@ -78,10 +94,10 @@ fn widget(key: &str, kind: &str) -> Value {
                     point(0.5 + 0.35 * angle.cos(), 0.5 + 0.35 * angle.sin())
                 })
                 .collect();
-            json!({ "kind": kind, "axis": null, "min": null, "max": null, "initial": null, "points": ring, "handles": null })
+            json!({ "kind": kind, "axis": null, "pivot": null, "handle": null, "min": null, "max": null, "initial": null, "points": ring, "handles": null })
         }
         _ => {
-            json!({ "kind": kind, "axis": null, "min": null, "max": null, "initial": null, "points": null,
+            json!({ "kind": kind, "axis": null, "pivot": null, "handle": null, "min": null, "max": null, "initial": null, "points": null,
                      "handles": [point(0.25, 0.3), point(0.75, 0.3), point(0.3, 0.75), point(0.7, 0.75)] })
         }
     }
@@ -176,11 +192,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_bottle_is_offered_a_rotating_tilt_not_a_slider() {
+        let answer = DemoProvider
+            .complete_json(request(SUGGESTIONS_SCHEMA, suggester_user_text("bottle")))
+            .await
+            .unwrap();
+        let parsed = parse_suggestions(&answer.content).unwrap();
+        let tilt = parsed.iter().find(|p| p.key == "tilt").unwrap();
+        assert_eq!(tilt.widget, WidgetKind::Rotate);
+    }
+
+    #[tokio::test]
     async fn widgets_pass_the_real_validator_for_every_kind() {
         for (key, kind) in [
             ("length", WidgetKind::Slider),
             ("shape", WidgetKind::ControlPoints),
             ("arm_position", WidgetKind::MultiHandle),
+            ("tilt", WidgetKind::Rotate),
+            ("size", WidgetKind::Scale),
+            ("position", WidgetKind::Move),
         ] {
             let property = Property {
                 key: key.into(),

@@ -1,4 +1,4 @@
-import { Move, SlidersHorizontal, Spline } from 'lucide-react'
+import { Move, RotateCw, Scaling, SlidersHorizontal, Spline, Waypoints } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { Property } from '@/api/client'
 import { describeError } from '@/api/errors'
@@ -13,7 +13,10 @@ const ICONS: Record<
 > = {
   slider: SlidersHorizontal,
   control_points: Spline,
-  multi_handle: Move,
+  multi_handle: Waypoints,
+  rotate: RotateCw,
+  scale: Scaling,
+  move: Move,
 }
 
 interface PropertyMenuProps {
