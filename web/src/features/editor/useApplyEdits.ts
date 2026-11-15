@@ -7,7 +7,7 @@ import { toast } from '@/design/toastStore'
 import { blobToBase64 } from '@/lib/base64'
 import { useEditorStore } from '@/state/editorStore'
 import type { StageHandle } from './canvas/stage'
-import { affectedRegions, outlineShapes, referenceKind, requestEdits } from './previews'
+import { outlineShapes, referenceKind, requestEdits } from './previews'
 
 /** The preview sent to the model is capped at this size on its longest side. */
 const PREVIEW_MAX_SIDE = 1280
@@ -81,7 +81,6 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
       cancelRequested.current = false
       state.beginApply()
       try {
-        const size = { width: image.width, height: image.height }
         const kind = referenceKind(state.pendingEdits)
         const blob =
           kind === 'outline'
@@ -93,7 +92,6 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
         const previewPng = blob ? await blobToBase64(blob) : null
         const body: EditRequest = {
           edits: requestEdits(state.pendingEdits),
-          regions: affectedRegions(state.pendingEdits, state.objects, size),
           ...(previewPng ? { preview_png: previewPng, preview_kind: kind } : {}),
           ...(model ? { model } : {}),
         }
@@ -114,7 +112,7 @@ export function useApplyEdits({ image, stageRef, onKeyProblem }: Options) {
         fail(describeError(error))
       }
     },
-    [api, image.height, image.id, image.width, stageRef, handleEvent, fail],
+    [api, image.id, stageRef, handleEvent, fail],
   )
 
   const cancel = useCallback(async () => {

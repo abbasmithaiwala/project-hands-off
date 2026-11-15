@@ -43,7 +43,7 @@ An unusable answer triggers one repair request that quotes the problem. If that 
 
 ## Image generation
 
-The image model is given the original photo and, when available, the rough warped preview as a geometry reference, plus an instruction written by the summariser. Prompts are in [`prompts/`](../prompts) (`suggester.v2.md`, `planner.v2.md`, `summariser.v3.md`, `generator-with-preview.v2.md`, `generator-with-outline.v2.md`, `generator-without-preview.v2.md`). The result is blended back into the original only inside the edited regions; see [ADR 0006](adr/0006-apply-pipeline.md).
+The image model is given the original photo and, when available, the rough warped preview as a geometry reference, plus an instruction written by the summariser. Prompts are in [`prompts/`](../prompts) (`suggester.v2.md`, `planner.v2.md`, `summariser.v4.md`, `generator-with-preview.v3.md`, `generator-with-outline.v3.md`, `generator-without-preview.v3.md`, `generator-with-rotation.v1.md`). A tilt that is the only edit uses `generator-with-rotation`, which says how far the object turned and which side its top swings to (worked out from the angle, not taken from the summariser). The model's image is returned as the result, resized to the original's resolution; see [ADR 0015](adr/0015-return-the-models-image.md). The image it returned and the reference it was shown are kept with the job as `generated` and `preview.jpg`.
 
 A model that declines (content policy) or answers in words instead of an image produces a `refused` error, which is not retried elsewhere.
 

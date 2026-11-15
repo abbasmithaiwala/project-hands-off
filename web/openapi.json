@@ -1350,13 +1350,6 @@
           "preview_png": {
             "type": ["string", "null"],
             "description": "Base64 PNG used as a geometry reference for the model; see `preview_kind`."
-          },
-          "regions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BBox"
-            },
-            "description": "For each affected area of the image, the box it covers before and after the edits.\nOnly pixels inside these boxes may change. When empty, the edited objects' boxes are used."
           }
         }
       },

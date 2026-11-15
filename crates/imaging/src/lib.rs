@@ -1,9 +1,8 @@
 //! Image decoding, validation, resizing and mask processing.
 
-pub mod composite;
+pub mod convert;
 pub mod crop;
 pub mod mask;
-pub mod object_color;
 
 use std::io::Cursor;
 

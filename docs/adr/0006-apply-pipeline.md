@@ -10,11 +10,11 @@ Applying edits means turning draggable-control changes into a photoreal image. A
 
 **The preview comes from the browser.** The editor already renders the warped preview with WebGL, so it captures exactly what the user sees (with outlines and controls hidden) and uploads it as a base64 PNG with the edits. Re-implementing the warp and rasteriser in Rust would duplicate that logic for no gain.
 
-**The browser also reports the affected regions.** For each edited object it sends the box covering both where the object was and where the warp moved it. The server adds each edited object's own box, pads slightly, and treats the union as the only area allowed to change.
+**(Superseded by [ADR 0015](0015-return-the-models-image.md): regions and blending were removed.) The browser also reports the affected regions.** For each edited object it sends the box covering both where the object was and where the warp moved it. The server adds each edited object's own box, pads slightly, and treats the union as the only area allowed to change.
 
 **Slider edits carry their axis.** The summariser has to say which end of a stretched object stays fixed ("keeping its left end where it is"). The server only knew the slider value, so the edit now includes the line the handle moved along.
 
-**Compositing keeps everything else exact.** The generated image is resized to the original's resolution, its colours are corrected using only the pixels outside the edited regions (gain limited to 0.8-1.25, skipped when less than 2% of the image is untouched), and it is blended in with a feathered edge. Pixels outside the regions are copied from the original unchanged, and a test asserts that byte for byte. Edited areas are only as sharp as the model's output, which is typically around 1-1.4 megapixels.
+**(Superseded by ADR 0015.) Compositing keeps everything else exact.** The generated image is resized to the original's resolution, its colours are corrected using only the pixels outside the edited regions (gain limited to 0.8-1.25, skipped when less than 2% of the image is untouched), and it is blended in with a feathered edge. Pixels outside the regions are copied from the original unchanged, and a test asserts that byte for byte. Edited areas are only as sharp as the model's output, which is typically around 1-1.4 megapixels.
 
 **No mask-overlay image is sent to the model.** The runbook listed one, but the spike (ADR 0003) got acceptable edits from the original and the preview alone, and every extra image adds cost.
 

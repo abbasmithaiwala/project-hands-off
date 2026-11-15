@@ -1,5 +1,4 @@
 import type { BBox, DetectedObject, Edit, EditChange, PreviewKind, Widget } from '@/api/client'
-import { affectedRegion } from '@/lib/regions'
 import {
   compose,
   dragControlPoints,
@@ -127,23 +126,6 @@ export function requestEdits(pending: readonly PendingEdit[]): Edit[] {
       ? { ...edit, change: { ...edit.change, axis: widget.axis } }
       : edit,
   )
-}
-
-/** For each edited object, the area of the photo its edits can change. */
-export function affectedRegions(
-  edits: readonly PendingEdit[],
-  objects: readonly DetectedObject[],
-  size: Size,
-): BBox[] {
-  const regions: BBox[] = []
-  for (const object of objects) {
-    const deformations = edits
-      .filter((e) => e.objectId === object.id)
-      .map((e) => deformationFor(e.widget, e.edit.change, size, object.bbox))
-      .filter((d): d is Deformation => d !== null)
-    if (deformations.length > 0) regions.push(affectedRegion(object, compose(deformations), size))
-  }
-  return regions
 }
 
 /**

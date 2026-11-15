@@ -497,11 +497,6 @@ export interface components {
       preview_kind?: components['schemas']['PreviewKind']
       /** @description Base64 PNG used as a geometry reference for the model; see `preview_kind`. */
       preview_png?: string | null
-      /**
-       * @description For each affected area of the image, the box it covers before and after the edits.
-       *     Only pixels inside these boxes may change. When empty, the edited objects' boxes are used.
-       */
-      regions?: components['schemas']['BBox'][]
     }
     /** @description The outcome of a successful edit job. */
     EditResult: {

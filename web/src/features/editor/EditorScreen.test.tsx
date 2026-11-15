@@ -368,7 +368,7 @@ describe('EditorScreen applying edits', () => {
     return context.events.instances[1]
   }
 
-  it('sends typed edits, the affected regions and the captured preview', async () => {
+  it('sends typed edits and the captured preview', async () => {
     const context = await applying()
     await startApply(context)
 
@@ -384,8 +384,6 @@ describe('EditorScreen applying edits', () => {
         },
       },
     ])
-    expect(body.regions).toHaveLength(1)
-    expect(body.regions[0].width).toBeGreaterThan(0)
     expect(body.preview_png).toBe('iVBORw==')
     expect(body.preview_kind).toBe('warped')
     expect(body).not.toHaveProperty('model')

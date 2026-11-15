@@ -72,6 +72,20 @@ impl BlobKey {
         Self(format!("jobs/{job}/result.png"))
     }
 
+    /// Key for the reference image an edit job sent to the image model, kept so a wrong result
+    /// can be compared with what the model was shown.
+    #[must_use]
+    pub fn job_preview(job: JobId) -> Self {
+        Self(format!("jobs/{job}/preview.jpg"))
+    }
+
+    /// Key for the image exactly as the image model returned it, before blending into the
+    /// original, kept to tell a model mistake from a compositing one.
+    #[must_use]
+    pub fn job_generated(job: JobId) -> Self {
+        Self(format!("jobs/{job}/generated"))
+    }
+
     /// Prefix holding everything stored for an image.
     #[must_use]
     pub fn image_dir(id: ImageId) -> Self {

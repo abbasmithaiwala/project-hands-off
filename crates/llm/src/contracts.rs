@@ -4,6 +4,7 @@
 //! rejected here before the rest of the application sees it.
 
 use std::collections::HashSet;
+use std::fmt::Write;
 
 use hands_off_core::NormalizedPoint;
 use hands_off_core::model::{
@@ -26,13 +27,15 @@ pub const PLANNER_PROMPT_VERSION: &str = "v2";
 /// Schema identifier for edit summaries.
 pub const SUMMARY_SCHEMA: &str = "edit_summary";
 /// Bump when the summariser prompt or schema changes.
-pub const SUMMARISER_PROMPT_VERSION: &str = "v3";
+pub const SUMMARISER_PROMPT_VERSION: &str = "v4";
 /// System prompt for the summariser.
-pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v3.md");
-const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v2.md");
-const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v2.md");
+pub const SUMMARISER_SYSTEM: &str = include_str!("../../../prompts/summariser.v4.md");
+const GENERATOR_WITH_OUTLINE: &str = include_str!("../../../prompts/generator-with-outline.v3.md");
+const GENERATOR_WITH_PREVIEW: &str = include_str!("../../../prompts/generator-with-preview.v3.md");
+const GENERATOR_WITH_ROTATION: &str =
+    include_str!("../../../prompts/generator-with-rotation.v1.md");
 const GENERATOR_WITHOUT_PREVIEW: &str =
-    include_str!("../../../prompts/generator-without-preview.v2.md");
+    include_str!("../../../prompts/generator-without-preview.v3.md");
 
 /// System prompt for the suggester.
 pub const SUGGESTER_SYSTEM: &str = include_str!("../../../prompts/suggester.v2.md");
@@ -232,6 +235,8 @@ pub struct EditLine<'a> {
     pub change: &'a EditChange,
 }
 
+/// Past this a turn is more than a lean, so "the top swings to one side" stops being true.
+const MAX_SIDE_HINT_DEGREES: f32 = 90.0;
 const MOVED_EPSILON: f32 = 1e-4;
 const MAX_LISTED_MOVES: usize = 4;
 const MAX_INSTRUCTION_CHARS: usize = 1500;
@@ -535,6 +540,28 @@ pub fn generation_instruction(
             .trim()
             .replace("{instruction}", instruction.trim()),
     }
+}
+
+/// The text sent to the image model when the only edit turns one object and the second image
+/// shows it turned.
+///
+/// The direction is worked out from the angle here, not taken from the summariser's wording:
+/// image models confuse clockwise with anticlockwise, so the side the top swings to is stated.
+#[must_use]
+pub fn rotation_instruction(object: &str, degrees: f32) -> String {
+    let side = if degrees < 0.0 { "left" } else { "right" };
+    let mut turn = turn_text(degrees);
+    if degrees.abs() < MAX_SIDE_HINT_DEGREES {
+        write!(
+            turn,
+            ", so the top of the {object} swings toward the {side} of the picture"
+        )
+        .ok();
+    }
+    GENERATOR_WITH_ROTATION
+        .trim()
+        .replace("{object}", object)
+        .replace("{turn}", &turn)
 }
 
 /// Maps a point from crop coordinates into image coordinates, clamping to the image.
@@ -858,6 +885,20 @@ mod tests {
                 .unwrap_err()
                 .contains("short")
         );
+    }
+
+    #[test]
+    fn a_turn_names_the_side_the_top_swings_to() {
+        let left = rotation_instruction("mug", -22.0);
+        assert!(
+            left.contains("22 degrees anticlockwise, so the top of the mug swings toward the left")
+        );
+        let right = rotation_instruction("mug", 15.0);
+        assert!(
+            right.contains("15 degrees clockwise, so the top of the mug swings toward the right")
+        );
+        let half = rotation_instruction("mug", 120.0);
+        assert!(half.contains("120 degrees clockwise") && !half.contains("swings"));
     }
 
     #[test]

@@ -3,7 +3,6 @@ import type { EditChange, Widget } from '@/api/client'
 import { editKey, type PendingEdit } from '@/state/editorStore'
 import { detectedObject } from '@/test/utils'
 import {
-  affectedRegions,
   buildPreviews,
   deformationFor,
   outlineShapes,
@@ -234,27 +233,6 @@ describe('requestEdits', () => {
       target: [{ x: 0.4, y: 0.3 }],
     }
     expect(requestEdits([pending(0, handles, change)])[0]?.change).toEqual(change)
-  })
-})
-
-describe('affectedRegions', () => {
-  const objects = [detectedObject(0, 'couch'), detectedObject(1, 'lamp')]
-
-  it('returns one region per edited object, covering the object', () => {
-    const regions = affectedRegions(
-      [pending(1, slider, { kind: 'slider', value: 0.5 })],
-      objects,
-      size,
-    )
-    expect(regions).toHaveLength(1)
-    expect(regions[0]?.x).toBeLessThanOrEqual(objects[1]?.bbox.x ?? 1)
-  })
-
-  it('is empty when nothing has really changed', () => {
-    expect(
-      affectedRegions([pending(0, slider, { kind: 'slider', value: 1 })], objects, size),
-    ).toEqual([])
-    expect(affectedRegions([], objects, size)).toEqual([])
   })
 })
 

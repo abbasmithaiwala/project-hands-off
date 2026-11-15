@@ -96,22 +96,14 @@ async fn an_edit_runs_through_every_stage_and_produces_a_result() {
 }
 
 #[tokio::test]
-async fn only_the_edited_region_of_the_original_changes() {
+async fn the_result_is_the_models_image_without_cropping_it_to_the_edited_area() {
     let app = edit_app().await;
     app.llm.push_ok(SUMMARY_JSON);
     let id = analysed(&app).await;
-    let original = image::load_from_memory(
-        &get(&app.app, &format!("/api/v1/images/{id}/original"))
-            .await
-            .body,
-    )
-    .unwrap()
-    .to_rgb8();
-    // The model returns the same picture with a bright patch where the couch is. The rest matches,
-    // so colour correction has nothing to fix.
-    let mut generated = original.clone();
-    for y in 25..55 {
-        for x in 40..80 {
+    let mut generated = image::RgbImage::from_pixel(WIDTH, HEIGHT, image::Rgb([10, 20, 30]));
+    // A patch in the far corner, well away from the edited object, must survive.
+    for y in 0..8 {
+        for x in 0..8 {
             generated.put_pixel(x, y, image::Rgb([250, 250, 250]));
         }
     }
@@ -135,21 +127,7 @@ async fn only_the_edited_region_of_the_original_changes() {
         (WIDTH, HEIGHT),
         "the result keeps the original resolution"
     );
-    for (x, y, pixel) in original.enumerate_pixels() {
-        let outside = !(24..96).contains(&x) || !(16..64).contains(&y);
-        if outside {
-            assert_eq!(
-                result.get_pixel(x, y),
-                pixel,
-                "({x}, {y}) changed outside the edited region"
-            );
-        }
-    }
-    let centre = result.get_pixel(WIDTH / 2, HEIGHT / 2);
-    assert!(
-        centre[0] > 200,
-        "the centre should come from the generated image, got {centre:?}"
-    );
+    assert_eq!(result, generated);
 }
 
 #[tokio::test]
@@ -160,12 +138,41 @@ async fn the_image_model_receives_the_original_and_the_preview_with_a_grounded_i
         .push_image(solid_png(WIDTH, HEIGHT, [1, 2, 3]));
     let id = analysed(&app).await;
 
-    run_edit(
+    let (_, json, _) = run_edit(
         &app.app,
         &id,
         &slider_edit_body(Some(&solid_png(WIDTH, HEIGHT, [9, 9, 9]))),
     )
     .await;
+
+    let kept = app
+        .app
+        .state
+        .blobs
+        .get(&hands_off_core::storage::BlobKey::job_preview(
+            job_id(&json).parse().unwrap(),
+        ))
+        .await
+        .expect("the reference image is kept with the job");
+    assert!(image::load_from_memory(&kept).is_ok());
+
+    let generated = app
+        .app
+        .state
+        .blobs
+        .get(&hands_off_core::storage::BlobKey::job_generated(
+            job_id(&json).parse().unwrap(),
+        ))
+        .await
+        .expect("the model's raw image is kept with the job");
+    assert_eq!(
+        image::load_from_memory(&generated)
+            .unwrap()
+            .to_rgb8()
+            .get_pixel(0, 0)
+            .0,
+        [1, 2, 3]
+    );
 
     let request = &app.generator.requests()[0];
     assert_eq!(
@@ -214,6 +221,30 @@ async fn a_reshape_sends_the_outline_guide_with_an_instruction_that_names_the_ob
         "the guide is passed as the second image"
     );
     insta::assert_snapshot!("generation_instruction_with_outline", request.instruction);
+}
+
+#[tokio::test]
+async fn a_tilt_gets_its_own_prompt_that_states_which_way_the_top_swings() {
+    let app = edit_app().await;
+    app.llm.push_ok(SUMMARY_JSON);
+    app.generator
+        .push_image(solid_png(WIDTH, HEIGHT, [1, 2, 3]));
+    let id = analysed(&app).await;
+    let body = json!({
+        "edits": [{
+            "object_id": 0,
+            "property": "tilt",
+            "change": { "kind": "rotate", "degrees": -22.0, "pivot": { "x": 0.5, "y": 0.8 } },
+        }],
+        "preview_png": base64_encode(&solid_png(WIDTH, HEIGHT, [9, 9, 9])),
+    });
+    let (status, _, events) = run_edit(&app.app, &id, &body).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    completed_result(&events);
+
+    let request = &app.generator.requests()[0];
+    assert!(request.preview.is_some());
+    insta::assert_snapshot!("generation_instruction_for_a_tilt", request.instruction);
 }
 
 #[tokio::test]

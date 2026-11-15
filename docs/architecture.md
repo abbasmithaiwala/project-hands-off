@@ -21,8 +21,8 @@ upload ─► detect ─► suggest ─► place control ─► drag ─► appl
    handles and move handles come straight from the object's outline and box, with no model call.
 5. **Drag.** Entirely in the browser: no network call. A slider stretches the object, a ring turns it, a corner handle
    resizes it, a body handle moves it, all live; reshape controls move a border.
-6. **Apply.** The browser sends the edits, the affected regions and a reference image. The server summarises the
-   change, asks an image model for the result, restores the object's colours, and blends it in only inside the edited regions.
+6. **Apply.** The browser sends the edits and a reference image. The server summarises the change, asks an image
+   model for the result and returns that image, resized to the original's resolution (ADR 0015).
 7. **Review and accept.** Compare before and after, then accept it as a new version of the project, retry, or discard.
 
 ## Crates

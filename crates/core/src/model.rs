@@ -248,10 +248,6 @@ pub enum PreviewKind {
 pub struct EditRequest {
     /// The edits, applied together in one generation.
     pub edits: Vec<Edit>,
-    /// For each affected area of the image, the box it covers before and after the edits.
-    /// Only pixels inside these boxes may change. When empty, the edited objects' boxes are used.
-    #[serde(default)]
-    pub regions: Vec<BBox>,
     /// Base64 PNG used as a geometry reference for the model; see `preview_kind`.
     #[serde(default)]
     pub preview_png: Option<String>,
@@ -574,8 +570,7 @@ mod tests {
     fn edit_requests_default_their_optional_fields() {
         let request: EditRequest = serde_json::from_str(r#"{"edits":[]}"#).unwrap();
         assert!(
-            request.regions.is_empty()
-                && request.preview_png.is_none()
+            request.preview_png.is_none()
                 && request.preview_kind == PreviewKind::Warped
                 && request.model.is_none()
         );

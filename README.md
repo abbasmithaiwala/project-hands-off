@@ -40,8 +40,8 @@ Hands-Off brings that idea to everyone, as free software you run yourself.
 ## How it works
 
 ```
- your photo ─► find objects ─► suggest edits ─► you drag a control ─► generate ─► blend back in
-               (runs locally)   (a vision model)  (instant, in browser)  (an image model)  (only where you edited)
+ your photo ─► find objects ─► suggest edits ─► you drag a control ─► generate ─► your result
+               (runs locally)   (a vision model)  (instant, in browser)  (an image model)  (the model's image)
 ```
 
 1. **Detection runs on your machine.** An open RF-DETR-Seg model finds objects and their outlines in about half
@@ -50,7 +50,7 @@ Hands-Off brings that idea to everyone, as free software you run yourself.
    where the handles belong, with strict validation and sensible fallbacks so the editor never dead-ends.
 3. **Dragging is local.** Your edit is drawn on the canvas immediately.
 4. **An image model does the pixels.** It gets your photo and a picture of what you drew, and is told to make it
-   look like a real photograph. The result is colour-matched and blended back in, so nothing outside your edit changes.
+   look like a real photograph. The result is shown as the model returned it, so a bigger or moved object is never cut off.
 
 ## Use any model on OpenRouter
 

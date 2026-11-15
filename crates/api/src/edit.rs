@@ -7,14 +7,15 @@ use std::collections::hash_map::Entry;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use hands_off_core::model::{
-    ChangeSummary, DetectedObject, Edit, EditChange, EditRequest, EditResult, is_valid_model_id,
+    ChangeSummary, DetectedObject, Edit, EditChange, EditRequest, EditResult, PreviewKind,
+    is_valid_model_id,
 };
 use hands_off_core::storage::BlobKey;
-use hands_off_core::{BBox, Error, ImageId, JobId, ObjectId, Result};
-use hands_off_imaging::composite::{composite_edit, encode_jpeg, encode_png, fit_to, fit_within};
+use hands_off_core::{Error, ImageId, JobId, ObjectId, Result};
+use hands_off_imaging::convert::{aspect_difference, encode_jpeg, encode_png, fit_to, fit_within};
 use hands_off_llm::contracts::{
     EditLine, SUMMARISER_SYSTEM, SUMMARY_SCHEMA, generation_instruction, parse_edit_summary,
-    summariser_user_text, summary_schema, template_summary,
+    rotation_instruction, summariser_user_text, summary_schema, template_summary,
 };
 use hands_off_llm::{ImageInput, ImageRequest, JsonRequest, Stage};
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,6 @@ use crate::jobs::JobContext;
 use crate::state::AppState;
 
 const MAX_EDITS: usize = 20;
-const MAX_REGIONS: usize = 40;
 const MAX_POINTS: usize = 64;
 const MAX_PREVIEW_BYTES: usize = 12 * 1024 * 1024;
 const MODEL_IMAGE_MAX_SIDE: u32 = 1280;
@@ -108,9 +108,9 @@ pub async fn prepare(
     if request.edits.is_empty() {
         return Err(Error::Validation("at least one edit is required".into()));
     }
-    if request.edits.len() > MAX_EDITS || request.regions.len() > MAX_REGIONS {
+    if request.edits.len() > MAX_EDITS {
         return Err(Error::Validation(format!(
-            "at most {MAX_EDITS} edits and {MAX_REGIONS} regions are allowed"
+            "at most {MAX_EDITS} edits are allowed"
         )));
     }
     if request
@@ -175,15 +175,28 @@ fn humanise(key: &str) -> String {
         .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
 }
 
-/// The boxes that may change: those the client reported plus every edited object's own box.
-fn changed_regions(request: &EditRequest, objects: &[DetectedObject]) -> Vec<BBox> {
-    let mut regions = request.regions.clone();
-    for object in objects {
-        if !regions.contains(&object.bbox) {
-            regions.push(object.bbox);
-        }
+/// The text for the image model. A single turn of one object, with the turned preview as the
+/// second image, gets its own prompt that states the direction; everything else uses the summary.
+fn image_instruction(
+    summary: &str,
+    request: &EditRequest,
+    objects: &[DetectedObject],
+    has_preview: bool,
+) -> String {
+    if let ([edit], [object], true, PreviewKind::Warped) = (
+        request.edits.as_slice(),
+        objects,
+        has_preview,
+        request.preview_kind,
+    ) && let EditChange::Rotate { degrees, .. } = &edit.change
+    {
+        return rotation_instruction(&object.label, *degrees);
     }
-    regions
+    generation_instruction(
+        summary,
+        &edited_labels(objects),
+        has_preview.then_some(request.preview_kind),
+    )
 }
 
 /// The labels of the edited objects, each once, in edit order.
@@ -227,17 +240,20 @@ async fn model_inputs(original: Vec<u8>, preview: Option<Vec<u8>>) -> Result<Mod
     .map_err(Error::internal)?
 }
 
-/// Blend the generated image into the original and encode the result as PNG.
-async fn blend_result(
-    original: Vec<u8>,
-    generated: Vec<u8>,
-    regions: Vec<BBox>,
-) -> Result<(Vec<u8>, f32)> {
+/// Fit the generated image to the original's size and encode it as PNG, returning how far its
+/// proportions differed from the original's.
+async fn finish_result(original: Vec<u8>, generated: Vec<u8>) -> Result<(Vec<u8>, f32)> {
     spawn_blocking(move || -> Result<_> {
         let original = hands_off_imaging::decode_oriented(&original)?;
         let generated = hands_off_imaging::decode_oriented(&generated)?;
-        let composited = composite_edit(&original, &generated, &regions);
-        Ok((encode_png(&composited.image)?, composited.aspect_difference))
+        let aspect_difference = aspect_difference(
+            generated.width(),
+            generated.height(),
+            original.width(),
+            original.height(),
+        );
+        let fitted = fit_to(&generated, original.width(), original.height());
+        Ok((encode_png(&fitted)?, aspect_difference))
     })
     .await
     .map_err(Error::internal)?
@@ -283,6 +299,13 @@ pub async fn execute(
     let summary = summarise(state, &lines, context).await;
     context.log(&format!("Instruction: {}", summary.instruction));
 
+    if let Some(preview) = &inputs.preview {
+        state
+            .blobs
+            .put(&BlobKey::job_preview(context.id()), preview.clone())
+            .await?;
+    }
+
     context.progress("generating", "Generating the edited image");
     let models = state.settings.models().await?;
     let primary = request.model.clone().unwrap_or(models.generator);
@@ -290,10 +313,11 @@ pub async fn execute(
         .generator
         .generate(ImageRequest {
             models: vec![primary, models.fallback],
-            instruction: generation_instruction(
+            instruction: image_instruction(
                 &summary.instruction,
-                &edited_labels(&objects),
-                inputs.preview.is_some().then_some(request.preview_kind),
+                &request,
+                &objects,
+                inputs.preview.is_some(),
             ),
             original: ImageInput {
                 mime: "image/jpeg",
@@ -317,9 +341,16 @@ pub async fn execute(
         seconds(generation_ms)
     ));
 
-    context.progress("compositing", "Blending the result into your photo");
-    let regions = changed_regions(&request, &objects);
-    let (png, aspect_difference) = blend_result(original_bytes, generated.bytes, regions).await?;
+    state
+        .blobs
+        .put(
+            &BlobKey::job_generated(context.id()),
+            generated.bytes.clone(),
+        )
+        .await?;
+
+    context.progress("compositing", "Preparing the result");
+    let (png, aspect_difference) = finish_result(original_bytes, generated.bytes).await?;
     if aspect_difference > ASPECT_WARNING {
         context.log(
             "The model changed the image proportions, so its result was stretched back to fit.",
@@ -334,7 +365,20 @@ pub async fn execute(
         cost_usd: generated.usage.cost_usd,
         generation_ms,
     };
-    let job = context.id();
+    store_result(state, context.id(), png, image_id, &result).await?;
+
+    context.progress("done", "Your edit is ready to review");
+    Ok(Some(json!(result)))
+}
+
+/// Keep the blended image and the result details for an edit job.
+async fn store_result(
+    state: &AppState,
+    job: JobId,
+    png: Vec<u8>,
+    image_id: ImageId,
+    result: &EditResult,
+) -> Result<()> {
     state.blobs.put(&BlobKey::job_result(job), png).await?;
     let stored = serde_json::to_vec(&StoredResult {
         image_id,
@@ -342,9 +386,7 @@ pub async fn execute(
     })
     .map_err(Error::internal)?;
     state.blobs.put(&BlobKey::job_meta(job), stored).await?;
-
-    context.progress("done", "Your edit is ready to review");
-    Ok(Some(json!(result)))
+    Ok(())
 }
 
 async fn property_labels(state: &AppState, image: ImageId, edits: &[Edit]) -> Result<Vec<String>> {

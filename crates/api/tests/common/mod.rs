@@ -282,7 +282,6 @@ pub fn solid_png(width: u32, height: u32, colour: [u8; 3]) -> Vec<u8> {
 pub fn slider_edit_body(preview: Option<&[u8]>) -> Value {
     let mut body = serde_json::json!({
         "edits": [{ "object_id": 0, "property": "length", "change": { "kind": "slider", "value": 0.6 } }],
-        "regions": [{ "x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5 }],
     });
     if let Some(bytes) = preview {
         body["preview_png"] = Value::String(base64_encode(bytes));

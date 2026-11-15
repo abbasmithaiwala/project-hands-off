@@ -62,13 +62,13 @@ If no API key is configured they return `503` with code `unavailable` and a mess
 
 | Route | Purpose |
 |---|---|
-| `POST /images/{id}/edits` | Body `EditRequest`: `edits`, optional `regions` (boxes that may change), `preview_png` (base64 PNG of the warped preview) and `model`. Validates immediately (`400`/`404`/`413`), then starts a job (`202`, `job_id`). |
+| `POST /images/{id}/edits` | Body `EditRequest`: `edits`, `preview_png` (base64 PNG of the warped preview) and `model`. Validates immediately (`400`/`404`/`413`), then starts a job (`202`, `job_id`). |
 | `GET /jobs/{id}/result` | The edited image (PNG, original resolution) once the job has completed. `404` otherwise. |
 | `POST /jobs/{id}/accept` | Store the result as a new image (`201`, or `200` if identical bytes already exist). |
 
 The job's events run through the stages `analysing`, `planning`, `generating`, `compositing`, `done`, with `log` events for the instruction written for the model, which model answered, and its time and cost. It completes with an `EditResult` (summary, one change-log line per edit, instruction, model, cost, generation time). Cancel with `DELETE /jobs/{id}`; the in-flight model request is abandoned immediately. See [ADR 0006](adr/0006-apply-pipeline.md).
 
-Slider edits carry the line the handle moved along (`axis`) so the change can be described in words. Only pixels inside the edited regions can differ from the original.
+Slider edits carry the line the handle moved along (`axis`) so the change can be described in words. The result is the image model's output resized to the original's resolution, so pixels outside the edited object can differ slightly from the original.
 
 ## Settings
 
